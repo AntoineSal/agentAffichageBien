@@ -331,7 +331,7 @@ def main():
     # Barre de chat en bas (pour Streamlit 1.11.1, on utilise text_input + bouton)
     col1, col2 = st.columns([0.9, 0.1])
     with col1:
-        prompt = st.text_input("Écrivez un message...", key="chat_input", label_visibility="collapsed")
+        prompt = st.text_input("Écrivez un message...", key="chat_input")
     with col2:
         send_button = st.button("Envoyer", key="send_button")
     
