@@ -95,8 +95,33 @@ def delete_chat(chat_id: str):
 def display_messages():
     """Affiche les messages de l'historique dans le chat."""
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        # Utiliser un conteneur avec un style personnalisé pour simuler chat_message
+        if message["role"] == "user":
+            st.markdown(f"""
+            <div style="
+                background-color: #e3f2fd;
+                padding: 12px 16px;
+                border-radius: 12px;
+                margin: 8px 0;
+                margin-left: 20%;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            ">
+                <strong>Utilisateur :</strong><br/>{message["content"]}
+            </div>
+            """, unsafe_allow_html=True)
+        else:  # agent
+            st.markdown(f"""
+            <div style="
+                background-color: #f1f1f1;
+                padding: 12px 16px;
+                border-radius: 12px;
+                margin: 8px 0;
+                margin-right: 20%;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            ">
+                <strong>Agent :</strong><br/>{message["content"]}
+            </div>
+            """, unsafe_allow_html=True)
 
 
 def get_mistral_response(prompt: str) -> str:
@@ -127,9 +152,19 @@ def process_user_message(prompt: str, uploaded_files: Optional[List] = None):
     # Ajouter le message utilisateur à l'historique
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # Afficher le message utilisateur
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    # Afficher le message utilisateur (simulé avec markdown)
+    st.markdown(f"""
+    <div style="
+        background-color: #e3f2fd;
+        padding: 12px 16px;
+        border-radius: 12px;
+        margin: 8px 0;
+        margin-left: 20%;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    ">
+        <strong>Utilisateur :</strong><br/>{prompt}
+    </div>
+    """, unsafe_allow_html=True)
     
     # Traiter selon le mode
     if st.session_state.mode == "Utilisateur":
@@ -151,8 +186,18 @@ def process_user_message(prompt: str, uploaded_files: Optional[List] = None):
     st.session_state.messages.append({"role": "agent", "content": html_output})
     
     # Afficher la réponse (HTML généré par afficherJoliment)
-    with st.chat_message("agent"):
-        st.markdown(html_output, unsafe_allow_html=True)
+    st.markdown(f"""
+    <div style="
+        background-color: #f1f1f1;
+        padding: 12px 16px;
+        border-radius: 12px;
+        margin: 8px 0;
+        margin-right: 20%;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    ">
+        <strong>Agent :</strong><br/>{html_output}
+    </div>
+    """, unsafe_allow_html=True)
     
     return response, html_output
 
@@ -283,8 +328,14 @@ def main():
     # Affichage de l'historique des messages
     display_messages()
     
-    # Barre de chat en bas
-    if prompt := st.chat_input("Écrivez un message...", key="chat_input"):
+    # Barre de chat en bas (pour Streamlit 1.11.1, on utilise text_input + bouton)
+    col1, col2 = st.columns([0.9, 0.1])
+    with col1:
+        prompt = st.text_input("Écrivez un message...", key="chat_input", label_visibility="collapsed")
+    with col2:
+        send_button = st.button("Envoyer", key="send_button")
+    
+    if send_button and prompt:
         # Si c'est le premier message d'un nouveau chat, lui donner un ID
         if not st.session_state.messages:
             st.session_state.current_chat_id = generate_chat_id()
