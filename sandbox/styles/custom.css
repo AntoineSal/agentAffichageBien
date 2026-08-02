@@ -1,0 +1,100 @@
+/* Styles personnalisés pour l'application Streamlit */
+
+/* Barre de chat en bas */
+.stChatInput {
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 90% !important;
+    max-width: 800px !important;
+    border-radius: 20px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    background-color: white !important;
+    padding: 10px !important;
+}
+
+/* Conteneur principal pour éviter le chevauchement avec la barre de chat */
+.block-container {
+    padding-bottom: 100px !important;
+}
+
+/* Messages du chat */
+.stChatMessage {
+    border-radius: 12px !important;
+    padding: 12px 16px !important;
+    margin: 8px 0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Message utilisateur */
+.stChatMessage[aria-label*="user"] {
+    background-color: #e3f2fd !important;
+    margin-left: 20% !important;
+}
+
+/* Message agent */
+.stChatMessage[aria-label*="agent"] {
+    background-color: #f1f1f1 !important;
+    margin-right: 20% !important;
+}
+
+/* Barre latérale */
+.section-main .css-1d391kg {
+    width: 280px !important;
+}
+
+/* Boutons dans la barre latérale */
+.stButton > button {
+    border-radius: 8px !important;
+    border: none !important;
+    background-color: #4CAF50 !important;
+    color: white !important;
+    transition: background-color 0.3s !important;
+    margin-bottom: 8px !important;
+}
+
+.stButton > button:hover {
+    background-color: #45a049 !important;
+}
+
+/* Titre de l'application */
+.stTitle {
+    color: #2c3e50 !important;
+    text-align: center !important;
+}
+
+/* Bouton pour afficher le code (en haut à droite) */
+.code-toggle-button {
+    position: fixed !important;
+    top: 10px !important;
+    right: 10px !important;
+    z-index: 1000 !important;
+    background-color: #f0f0f0 !important;
+    border: 1px solid #ccc !important;
+    border-radius: 50% !important;
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 18px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+}
+
+/* Style pour l'aperçu du code */
+.stExpander {
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 8px !important;
+    margin: 10px 0 !important;
+}
+
+/* Style pour les boutons de suppression dans l'historique */
+.delete-button {
+    background-color: #ff4444 !important;
+    color: white !important;
+}
+
+.delete-button:hover {
+    background-color: #cc0000 !important;
+}
