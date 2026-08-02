@@ -248,14 +248,14 @@ def main():
             if st.button("💾 Sauvegarder ce chat", use_container_width=True):
                 save_current_chat()
                 st.success("Chat sauvegardé !")
-                st.rerun()
+                st.experimental_rerun()
         
         # Bouton pour créer un nouveau chat
         if st.button("🆕 Nouveau Chat", use_container_width=True):
             if st.session_state.messages:
                 save_current_chat()  # Sauvegarder le chat actuel avant de réinitialiser
             reset_chat()
-            st.rerun()
+            st.experimental_rerun()
         
         # Liste des chats précédents
         if st.session_state.chat_history:
@@ -272,11 +272,11 @@ def main():
                 with col1:
                     if st.button(f"📄 {chat_display}", key=f"load_{chat_id}", use_container_width=True):
                         load_chat(chat_id)
-                        st.rerun()
+                        st.experimental_rerun()
                 with col2:
                     if st.button("❌", key=f"delete_{chat_id}", use_container_width=True):
                         delete_chat(chat_id)
-                        st.rerun()
+                        st.experimental_rerun()
         else:
             st.info("Aucun chat précédent.")
     
@@ -291,7 +291,7 @@ def main():
             st.session_state.chat_timestamp = st.session_state.get("chat_timestamp", "")
         
         process_user_message(prompt, uploaded_files)
-        st.rerun()
+        st.experimental_rerun()
 
 
 if __name__ == "__main__":
