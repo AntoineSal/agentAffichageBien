@@ -95,9 +95,9 @@ def display_message(message: Dict[str, str], index: int):
     
     # Afficher le message de manière simple
     if role == "user":
-        st.markdown(f"**Utilisateur :**\n\n{content}")
+        st.markdown(content)
     else:  # agent
-        st.markdown(f"**Agent :**\n\n{content}")
+        st.markdown(content, unsafe_allow_html=True)
     
     # Ajouter le bouton d'aperçu du code UNIQUEMENT pour les messages de l'agent
     if role == "agent":
@@ -138,7 +138,7 @@ def process_user_message(prompt: str, uploaded_files: Optional[List] = None):
     st.session_state.messages.append({"role": "user", "content": prompt})
     
     # Afficher le message utilisateur
-    st.markdown(f"**Utilisateur :**\n\n{prompt}")
+    st.markdown(prompt)
     
     # Traiter selon le mode
     if st.session_state.mode == "Utilisateur":
@@ -156,7 +156,7 @@ def process_user_message(prompt: str, uploaded_files: Optional[List] = None):
     st.session_state.messages.append({"role": "agent", "content": html_output})
     
     # Afficher la réponse (HTML généré par afficherJoliment)
-    st.markdown(f"**Agent :**\n\n{html_output}")
+    st.markdown(html_output, unsafe_allow_html=True)
     
     # Bouton pour afficher le code sous le message de l'agent
     if st.button(f"Afficher le code", key=f"code_{len(st.session_state.messages)-1}"):
