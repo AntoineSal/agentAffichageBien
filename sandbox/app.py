@@ -245,13 +245,13 @@ def main():
         
         # Bouton pour sauvegarder le chat actuel
         if st.session_state.messages:
-            if st.button("💾 Sauvegarder ce chat", use_container_width=True):
+            if st.button("💾 Sauvegarder ce chat"):
                 save_current_chat()
                 st.success("Chat sauvegardé !")
                 st.experimental_rerun()
         
         # Bouton pour créer un nouveau chat
-        if st.button("🆕 Nouveau Chat", use_container_width=True):
+        if st.button("🆕 Nouveau Chat"):
             if st.session_state.messages:
                 save_current_chat()  # Sauvegarder le chat actuel avant de réinitialiser
             reset_chat()
@@ -270,11 +270,11 @@ def main():
                 
                 col1, col2 = st.columns([0.85, 0.15])
                 with col1:
-                    if st.button(f"📄 {chat_display}", key=f"load_{chat_id}", use_container_width=True):
+                    if st.button(f"📄 {chat_display}", key=f"load_{chat_id}"):
                         load_chat(chat_id)
                         st.experimental_rerun()
                 with col2:
-                    if st.button("❌", key=f"delete_{chat_id}", use_container_width=True):
+                    if st.button("❌", key=f"delete_{chat_id}"):
                         delete_chat(chat_id)
                         st.experimental_rerun()
         else:
