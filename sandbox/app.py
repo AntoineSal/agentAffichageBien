@@ -93,41 +93,16 @@ def display_message(message: Dict[str, str], index: int):
     role = message["role"]
     content = message["content"]
     
-    # Style de base pour le message
+    # Afficher le message de manière simple
     if role == "user":
-        message_style = """
-        <div style="
-            background-color: #f0f0f0;
-            padding: 12px 16px;
-            border-radius: 12px;
-            margin: 8px 0;
-            margin-left: 20%;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        ">
-            <strong>Utilisateur :</strong><br/>{content}
-        </div>
-        """
+        st.markdown(f"**Utilisateur :**\n\n{content}")
     else:  # agent
-        message_style = """
-        <div style="
-            background-color: #f8f8f8;
-            padding: 12px 16px;
-            border-radius: 12px;
-            margin: 8px 0;
-            margin-right: 20%;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        ">
-            <strong>Agent :</strong><br/>{content}
-        </div>
-        """
-    
-    # Afficher le message
-    st.markdown(message_style, unsafe_allow_html=True)
+        st.markdown(f"**Agent :**\n\n{content}")
     
     # Ajouter le bouton d'aperçu du code UNIQUEMENT pour les messages de l'agent
     if role == "agent":
         if st.button(f"Afficher le code", key=f"code_{index}"):
-            with st.expander("Code généré", expanded=True):
+            with st.expander("Code genere", expanded=True):
                 st.code(content, language="html")
 
 
@@ -163,18 +138,7 @@ def process_user_message(prompt: str, uploaded_files: Optional[List] = None):
     st.session_state.messages.append({"role": "user", "content": prompt})
     
     # Afficher le message utilisateur
-    st.markdown(f"""
-    <div style="
-        background-color: #f0f0f0;
-        padding: 12px 16px;
-        border-radius: 12px;
-        margin: 8px 0;
-        margin-left: 20%;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    ">
-        <strong>Utilisateur :</strong><br/>{prompt}
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f"**Utilisateur :**\n\n{prompt}")
     
     # Traiter selon le mode
     if st.session_state.mode == "Utilisateur":
@@ -192,18 +156,7 @@ def process_user_message(prompt: str, uploaded_files: Optional[List] = None):
     st.session_state.messages.append({"role": "agent", "content": html_output})
     
     # Afficher la réponse (HTML généré par afficherJoliment)
-    st.markdown(f"""
-    <div style="
-        background-color: #f8f8f8;
-        padding: 12px 16px;
-        border-radius: 12px;
-        margin: 8px 0;
-        margin-right: 20%;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    ">
-        <strong>Agent :</strong><br/>{html_output}
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f"**Agent :**\n\n{html_output}")
     
     # Bouton pour afficher le code sous le message de l'agent
     if st.button(f"Afficher le code", key=f"code_{len(st.session_state.messages)-1}"):
@@ -300,21 +253,39 @@ def main():
         else:
             st.info("Aucun chat precedent.")
     
-    # Affichage de l'historique des messages
-    display_messages()
+    # Conteneur principal pour les messages (avec marge en bas pour la barre de chat)
+    message_container = st.container()
     
-    # Barre de chat en bas (fixée)
+    with message_container:
+        # Affichage de l'historique des messages
+        display_messages()
+        
+        # Espace pour éviter que le dernier message soit caché par la barre de chat
+        st.markdown("<div style='height: 80px;'></div>", unsafe_allow_html=True)
+    
+    # Barre de chat fixée en bas
     st.markdown("""
-    <div style='position: fixed; bottom: 20px; left: 0; right: 0; padding: 10px; background: white; z-index: 1000;'>
+    <style>
+    .chat-input-fixed {
+        position: fixed;
+        bottom: 20px;
+        left: 0;
+        right: 0;
+        background: white;
+        padding: 10px;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+    }
+    </style>
     """, unsafe_allow_html=True)
     
+    st.markdown('<div class="chat-input-fixed">', unsafe_allow_html=True)
     col1, col2 = st.columns([0.9, 0.1])
     with col1:
-        prompt = st.text_input("Ecrivez un message...", key="chat_input")
+        prompt = st.text_input("Ecrivez un message...", key="chat_input", label_visibility="hidden")
     with col2:
         send_button = st.button("Envoyer", key="send_button")
-    
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     
     if send_button and prompt:
         # Si c'est le premier message d'un nouveau chat, lui donner un ID
@@ -323,9 +294,6 @@ def main():
         
         process_user_message(prompt, uploaded_files)
         st.experimental_rerun()
-    
-    # Ajouter une marge en bas pour éviter que le contenu soit caché par la barre de chat
-    st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
