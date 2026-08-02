@@ -5,7 +5,7 @@ Gère l'interface utilisateur, l'historique des messages, et l'intégration avec
 
 import streamlit as st
 from typing import List, Dict, Optional, Tuple
-from utils import call_mistral_api
+from .utils import call_mistral_api
 import os
 import json
 
