@@ -28,6 +28,12 @@ wheels/
 *.manifest
 *.spec
 
+# Environment files
+.env
+.env.local
+.env.*
+!.env.example
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

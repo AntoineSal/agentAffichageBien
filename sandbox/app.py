@@ -8,6 +8,7 @@ from typing import List, Dict, Optional, Tuple
 from .utils import call_mistral_api
 import os
 import json
+from datetime import datetime
 
 # Importer la fonction du stagiaire
 from agentAffichage.afficheur import afficherJoliment
@@ -19,13 +20,11 @@ def initialize_session_state():
         st.session_state.messages: List[Dict[str, str]] = []
     
     if "mode" not in st.session_state:
-        st.session_state.mode: str = "Utilisateur"  # ou "Agent"
+        st.session_state.mode: str = "Utilisateur"
     
     if "api_key" not in st.session_state:
-        st.session_state.api_key: Optional[str] = None
-    
-    if "show_code" not in st.session_state:
-        st.session_state.show_code: bool = False
+        # Charger la clé API depuis le fichier .env si disponible
+        st.session_state.api_key: Optional[str] = os.getenv("MISTRAL_API_KEY")
     
     if "chat_history" not in st.session_state:
         st.session_state.chat_history: List[Dict] = []
@@ -37,7 +36,6 @@ def initialize_session_state():
 def reset_chat():
     """Réinitialise l'historique des messages."""
     st.session_state.messages = []
-    st.session_state.show_code = False
 
 
 def generate_chat_id() -> str:
@@ -51,7 +49,6 @@ def save_current_chat():
     if not st.session_state.messages:
         return
     
-    from datetime import datetime
     chat_id = st.session_state.current_chat_id or generate_chat_id()
     chat_data = {
         "id": chat_id,
@@ -78,7 +75,6 @@ def load_chat(chat_id: str):
         if chat["id"] == chat_id:
             st.session_state.messages = chat["messages"].copy()
             st.session_state.current_chat_id = chat_id
-            st.session_state.show_code = False
             break
 
 
@@ -92,36 +88,53 @@ def delete_chat(chat_id: str):
         st.session_state.current_chat_id = None
 
 
+def display_message(message: Dict[str, str], index: int):
+    """Affiche un message avec son bouton d'aperçu du code."""
+    role = message["role"]
+    content = message["content"]
+    
+    # Style de base pour le message
+    if role == "user":
+        message_style = """
+        <div style="
+            background-color: #f0f0f0;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin: 8px 0;
+            margin-left: 20%;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        ">
+            <strong>Utilisateur :</strong><br/>{content}
+        </div>
+        """
+    else:  # agent
+        message_style = """
+        <div style="
+            background-color: #f8f8f8;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin: 8px 0;
+            margin-right: 20%;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        ">
+            <strong>Agent :</strong><br/>{content}
+        </div>
+        """
+    
+    # Afficher le message
+    st.markdown(message_style, unsafe_allow_html=True)
+    
+    # Ajouter le bouton d'aperçu du code UNIQUEMENT pour les messages de l'agent
+    if role == "agent":
+        if st.button(f"Afficher le code", key=f"code_{index}"):
+            with st.expander("Code généré", expanded=True):
+                st.code(content, language="html")
+
+
 def display_messages():
     """Affiche les messages de l'historique dans le chat."""
-    for message in st.session_state.messages:
-        # Utiliser un conteneur avec un style personnalisé pour simuler chat_message
-        if message["role"] == "user":
-            st.markdown(f"""
-            <div style="
-                background-color: #e3f2fd;
-                padding: 12px 16px;
-                border-radius: 12px;
-                margin: 8px 0;
-                margin-left: 20%;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            ">
-                <strong>Utilisateur :</strong><br/>{message["content"]}
-            </div>
-            """, unsafe_allow_html=True)
-        else:  # agent
-            st.markdown(f"""
-            <div style="
-                background-color: #f1f1f1;
-                padding: 12px 16px;
-                border-radius: 12px;
-                margin: 8px 0;
-                margin-right: 20%;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            ">
-                <strong>Agent :</strong><br/>{message["content"]}
-            </div>
-            """, unsafe_allow_html=True)
+    for index, message in enumerate(st.session_state.messages):
+        display_message(message, index)
 
 
 def get_mistral_response(prompt: str) -> str:
@@ -145,17 +158,14 @@ def process_user_message(prompt: str, uploaded_files: Optional[List] = None):
     Args:
         prompt (str): Le message saisi par l'utilisateur.
         uploaded_files (List, optional): Liste des fichiers uploadés.
-    
-    Returns:
-        Tuple[str, str]: (response_text, html_output) pour l'aperçu du code.
     """
     # Ajouter le message utilisateur à l'historique
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # Afficher le message utilisateur (simulé avec markdown)
+    # Afficher le message utilisateur
     st.markdown(f"""
     <div style="
-        background-color: #e3f2fd;
+        background-color: #f0f0f0;
         padding: 12px 16px;
         border-radius: 12px;
         margin: 8px 0;
@@ -169,18 +179,14 @@ def process_user_message(prompt: str, uploaded_files: Optional[List] = None):
     # Traiter selon le mode
     if st.session_state.mode == "Utilisateur":
         # Appel à l'API Mistral
-        with st.spinner("Réflexion en cours..."):
+        with st.spinner("Reflexion en cours..."):
             response = get_mistral_response(prompt)
     else:  # Mode "Agent"
         # Simuler une réponse directe (sans API)
-        response = prompt  # Dans ce mode, on affiche directement ce qui est saisi
+        response = prompt
     
     # Appeler la fonction du stagiaire pour générer l'affichage
     html_output = afficherJoliment(response, uploaded_files)
-    
-    # Stocker la dernière réponse générée pour l'aperçu du code
-    st.session_state.last_response = response
-    st.session_state.last_html_output = html_output
     
     # Ajouter la réponse à l'historique
     st.session_state.messages.append({"role": "agent", "content": html_output})
@@ -188,7 +194,7 @@ def process_user_message(prompt: str, uploaded_files: Optional[List] = None):
     # Afficher la réponse (HTML généré par afficherJoliment)
     st.markdown(f"""
     <div style="
-        background-color: #f1f1f1;
+        background-color: #f8f8f8;
         padding: 12px 16px;
         border-radius: 12px;
         margin: 8px 0;
@@ -199,7 +205,10 @@ def process_user_message(prompt: str, uploaded_files: Optional[List] = None):
     </div>
     """, unsafe_allow_html=True)
     
-    return response, html_output
+    # Bouton pour afficher le code sous le message de l'agent
+    if st.button(f"Afficher le code", key=f"code_{len(st.session_state.messages)-1}"):
+        with st.expander("Code genere", expanded=True):
+            st.code(html_output, language="html")
 
 
 def main():
@@ -207,7 +216,6 @@ def main():
     # Configuration de la page
     st.set_page_config(
         page_title="Sandbox Agent Affichage",
-        page_icon="🎨",
         layout="wide",
         initial_sidebar_state="expanded"
     )
@@ -217,132 +225,107 @@ def main():
         with open("sandbox/styles/custom.css", "r") as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     except FileNotFoundError:
-        st.warning("Fichier CSS personnalisé introuvable. Utilisation des styles par défaut.")
+        pass
     
     # Initialisation de l'état de la session
     initialize_session_state()
     
-    # Titre de l'application
-    st.title("🎨 Sandbox pour l'Agent d'Affichage")
-    st.markdown("""
-    Bienvenue dans la sandbox pour tester l'agent d'affichage.
-    
-    - **Mode Utilisateur** : Vos messages sont envoyés à l'API Mistral avant d'être affichés.
-    - **Mode Agent** : Vos messages sont directement affichés comme réponse (simulation).
-    """)
-    
-    # Bouton pour afficher/masquer le code généré (en haut à droite)
-    col1, col2 = st.columns([0.9, 0.1])
-    with col2:
-        if st.button("</>", help="Afficher/Masquer le code généré"):
-            st.session_state.show_code = not st.session_state.show_code
-    
-    # Afficher l'aperçu du code si activé
-    if st.session_state.show_code and hasattr(st.session_state, 'last_html_output'):
-        with st.expander("📜 Code généré", expanded=True):
-            st.code(st.session_state.last_html_output, language="html")
-            if st.button("📋 Copier le code", key="copy_code"):
-                st.session_state.code_copied = True
-                st.success("Code copié dans le presse-papiers !")
-                # Utiliser JavaScript pour copier dans le presse-papiers
-                st.markdown("""
-                <script>
-                    navigator.clipboard.writeText(`""" + st.session_state.last_html_output.replace('`', '\\`') + """`);
-                </script>
-                """, unsafe_allow_html=True)
-    
     # Barre latérale pour les paramètres et l'historique
     with st.sidebar:
-        st.header("⚙️ Paramètres")
+        st.header("Parametres")
         
         # Sélection du mode
         st.session_state.mode = st.radio(
             "Mode",
             options=["Utilisateur", "Agent"],
             index=0 if st.session_state.mode == "Utilisateur" else 1,
-            help="""
-            - **Utilisateur** : Envoie les messages à l'API Mistral.
-            - **Agent** : Affiche directement les messages sans appel API.
-            """
+            help="Utilisateur : Envoie les messages a l'API Mistral. Agent : Affiche directement les messages sans appel API."
         )
         
         # Clé API Mistral (uniquement en mode Utilisateur)
         if st.session_state.mode == "Utilisateur":
             st.session_state.api_key = st.text_input(
-                "Clé API Mistral",
+                "Cle API Mistral",
                 type="password",
                 value=st.session_state.get("api_key", ""),
-                help="Votre clé API Mistral. Si non fournie, la variable d'environnement MISTRAL_API_KEY sera utilisée."
+                help="Votre cle API Mistral. Si non fournie, la variable d'environnement MISTRAL_API_KEY sera utilisee."
             )
         
         # Upload de fichiers
         st.markdown("---")
-        st.header("📁 Fichiers")
+        st.header("Fichiers")
         uploaded_files = st.file_uploader(
             "Upload de fichiers",
             accept_multiple_files=True,
-            help="Les fichiers uploadés seront passés à la fonction afficherJoliment."
+            help="Les fichiers uploades seront passes a la fonction afficherJoliment."
         )
         
         # Gestion de l'historique des chats
         st.markdown("---")
-        st.header("💬 Historique des chats")
+        st.header("Historique des chats")
         
         # Bouton pour sauvegarder le chat actuel
         if st.session_state.messages:
-            if st.button("💾 Sauvegarder ce chat"):
+            if st.button("Sauvegarder ce chat"):
                 save_current_chat()
-                st.success("Chat sauvegardé !")
+                st.success("Chat sauvegarde !")
                 st.experimental_rerun()
         
         # Bouton pour créer un nouveau chat
-        if st.button("🆕 Nouveau Chat"):
+        if st.button("Nouveau Chat"):
             if st.session_state.messages:
-                save_current_chat()  # Sauvegarder le chat actuel avant de réinitialiser
+                save_current_chat()
             reset_chat()
             st.experimental_rerun()
         
         # Liste des chats précédents
         if st.session_state.chat_history:
-            st.markdown("**Chats précédents**")
+            st.markdown("**Chats precedents**")
             for chat in reversed(st.session_state.chat_history):
                 chat_id = chat["id"]
                 timestamp = chat.get("timestamp", "Inconnu")
                 chat_preview = chat["messages"][0]["content"][:25] + "..." if chat["messages"] else "Chat vide"
                 
-                # Afficher le timestamp et l'aperçu
                 chat_display = f"{timestamp[:10]} - {chat_preview}"
                 
                 col1, col2 = st.columns([0.85, 0.15])
                 with col1:
-                    if st.button(f"📄 {chat_display}", key=f"load_{chat_id}"):
+                    if st.button(f"{chat_display}", key=f"load_{chat_id}"):
                         load_chat(chat_id)
                         st.experimental_rerun()
                 with col2:
-                    if st.button("❌", key=f"delete_{chat_id}"):
+                    if st.button("X", key=f"delete_{chat_id}"):
                         delete_chat(chat_id)
                         st.experimental_rerun()
         else:
-            st.info("Aucun chat précédent.")
+            st.info("Aucun chat precedent.")
     
     # Affichage de l'historique des messages
     display_messages()
     
-    # Barre de chat en bas (pour Streamlit 1.11.1, on utilise text_input + bouton)
+    # Barre de chat en bas (fixée)
+    st.markdown("""
+    <div style='position: fixed; bottom: 20px; left: 0; right: 0; padding: 10px; background: white; z-index: 1000;'>
+    """, unsafe_allow_html=True)
+    
     col1, col2 = st.columns([0.9, 0.1])
     with col1:
-        prompt = st.text_input("Écrivez un message...", key="chat_input")
+        prompt = st.text_input("Ecrivez un message...", key="chat_input")
     with col2:
         send_button = st.button("Envoyer", key="send_button")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
     
     if send_button and prompt:
         # Si c'est le premier message d'un nouveau chat, lui donner un ID
         if not st.session_state.messages:
             st.session_state.current_chat_id = generate_chat_id()
-            st.session_state.chat_timestamp = st.session_state.get("chat_timestamp", "")
         
         process_user_message(prompt, uploaded_files)
         st.experimental_rerun()
+    
+    # Ajouter une marge en bas pour éviter que le contenu soit caché par la barre de chat
+    st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
