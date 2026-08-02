@@ -282,7 +282,7 @@ def main():
     st.markdown('<div class="chat-input-fixed">', unsafe_allow_html=True)
     col1, col2 = st.columns([0.9, 0.1])
     with col1:
-        prompt = st.text_input("Ecrivez un message...", key="chat_input", label_visibility="hidden")
+        prompt = st.text_input("Ecrivez un message...", key="chat_input", )
     with col2:
         send_button = st.button("Envoyer", key="send_button")
     st.markdown('</div>', unsafe_allow_html=True)
