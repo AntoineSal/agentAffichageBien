@@ -4,3 +4,4 @@ PySide6>=6.5.0
 requests>=2.31.0
 pytest>=8.1.1
 altair>=4.2.2
+markdown>=3.6
