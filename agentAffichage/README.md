@@ -1,7 +1,7 @@
 # Pipeline d'affichage — sélection + rendu
 
-Ce document explique le fonctionnement interne du module `agentAffichage`.
-. Pour lancer l'application de test, voir le [README à la racine](../README.md).
+Ce document explique le fonctionnement interne du module `agentAffichage`. Pour
+lancer l'application de test, voir le [README à la racine](../README.md).
 
 ## Objectif
 
@@ -53,11 +53,21 @@ sait déjà parser :
 Bien sûr ! Voici les prévisions pour Paris : il fait 18°C, pluie légère...
 
 ​```widget:weather
-{"location": "Paris", "current": {"temperature": "18°C", "condition": "Pluie légère"}, "forecast_3_days": [...]}
+{"location": "Paris", "current": {"temperature": "18°C", "condition": "Pluie légère"}, "forecast": [...]}
 ​```
 ```
 
 Ce format est stable et ne change pas au fil des phases suivantes.
+
+### Convention : widgets extensibles, jamais de valeur de repli
+
+Chaque widget accepte volontairement plus de champs que ce qu'un texte donné en
+remplira en général (ex : `forecast` peut contenir n'importe quel nombre de jours,
+pas seulement 3). Mais si une donnée n'est pas présente dans le texte source, la
+ligne correspondante **disparaît du rendu** — elle n'affiche jamais de valeur de
+repli comme `"?"` ou `"Lieu inconnu"`. `rendu/registre.py` factorise ce principe
+dans deux utilitaires partagés, `_fragment()` et `_joindre_fragments()`, pensés
+pour être réutilisés par les prochains widgets plutôt que réécrits à chaque fois.
 
 ## Structure des fichiers
 

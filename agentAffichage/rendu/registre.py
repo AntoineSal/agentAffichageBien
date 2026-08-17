@@ -40,6 +40,22 @@ def liste(items: List[str], ordonnee: bool = False) -> str:
     return f'<{tag} style="margin:8px 0 10px;padding-left:22px;">{puces}</{tag}>'
 
 
+# ─── Utilitaires partagés ───────────────────────────────────────────────────
+# Convention pour tous les widgets : une donnée absente ne produit ni valeur de
+# repli ("?", "Lieu inconnu") ni ligne vide — la ligne disparaît. Ces deux
+# fonctions factorisent ce principe pour que les prochains widgets (lien, photo,
+# calendrier, carte...) n'aient pas à le réécrire à la main à chaque fois.
+
+def _fragment(label: str, valeur: Optional[str]) -> str:
+    """'Label valeur' si valeur est présente, sinon une chaîne vide."""
+    return f"{label} {valeur}" if valeur else ""
+
+
+def _joindre_fragments(*fragments: str, separateur: str = " · ") -> str:
+    """Assemble les fragments non vides (voir _fragment) dans l'ordre donné."""
+    return separateur.join(html.escape(f) for f in fragments if f)
+
+
 # ─── Composant riche : carte météo ──────────────────────────────────────────
 
 _ICONES_METEO = [
@@ -70,49 +86,61 @@ def _jour_court(date_iso: str) -> str:
 
 def carte_meteo(data: Dict) -> str:
     """
-    Attend le format renvoyé par le tool get_weather (open_meteo) du backend :
-    {"location": str, "current": {...}, "forecast_3_days": [...]}
+    Composant météo : chaque ligne n'apparaît que si la donnée correspondante est
+    présente dans data. Un texte source partiel (ex: seulement une température)
+    produit un widget partiel — jamais de valeur de repli ("?", "Lieu inconnu").
+
+    Champs attendus, tous optionnels sauf mention contraire :
+      {"location": str,
+       "current": {"temperature": str, "condition": str, "apparent_temperature": str,
+                    "wind_speed": str, "humidity": str},
+       "forecast": [{"date": str, "condition": str, "temp_max": str, "temp_min": str}]}
+
+    "date" est la seule clé obligatoire au sein d'un jour de forecast (un jour sans
+    date ne peut pas être affiché). forecast n'est pas limité à 3 éléments : on
+    affiche autant de jours que fournis, d'où le renommage depuis forecast_3_days.
     """
-    location = data.get("location", "Lieu inconnu")
-    current = data.get("current", {})
-    forecast = data.get("forecast_3_days", [])
+    location = data.get("location")
+    current = data.get("current") or {}
+    forecast = data.get("forecast") or []
 
-    condition = current.get("condition", "")
-    temperature = current.get("temperature", "?")
+    condition = current.get("condition")
+    temperature = current.get("temperature")
 
-    details = [
-        f"Ressenti {v}" if k == "apparent_temperature" else
-        f"Vent {v}" if k == "wind_speed" else
-        f"Humidité {v}"
-        for k, v in current.items()
-        if k in ("apparent_temperature", "wind_speed", "humidity") and v
-    ]
-    details_html = " · ".join(html.escape(d) for d in details)
+    details_html = _joindre_fragments(
+        _fragment("Ressenti", current.get("apparent_temperature")),
+        _fragment("Vent", current.get("wind_speed")),
+        _fragment("Humidité", current.get("humidity")),
+    )
+
+    entete_html = "".join(filter(None, [
+        f'<div style="font-size:13px;font-weight:600;color:#B45309;text-transform:uppercase;'
+        f'letter-spacing:0.05em;">{html.escape(location)}</div>' if location else "",
+        f'<div style="font-size:36px;font-weight:700;color:#1a1a1a;margin-top:4px;">'
+        f'{html.escape(temperature)}</div>' if temperature else "",
+        f'<div style="font-size:14px;color:#57534E;margin-top:2px;">'
+        f'{html.escape(condition)}</div>' if condition else "",
+        f'<div style="font-size:12px;color:#78716C;margin-top:6px;">{details_html}</div>'
+        if details_html else "",
+    ]))
+    icone_html = f'<div style="font-size:56px;">{_icone_meteo(condition)}</div>' if condition else ""
 
     cases_prevision = "".join(
-        f'''<div style="flex:1;text-align:center;padding:10px 6px;background:#FBF7F2;
+        f'''<div style="flex:0 0 64px;text-align:center;padding:10px 6px;background:#FBF7F2;
                 border-radius:10px;border:1px solid #E8E2DB;">
               <div style="font-size:11px;font-weight:600;color:#A8A29E;text-transform:uppercase;
-                    letter-spacing:0.04em;">{html.escape(_jour_court(jour.get("date", "")))}</div>
-              <div style="font-size:22px;margin:4px 0;">{_icone_meteo(jour.get("condition", ""))}</div>
-              <div style="font-size:13px;color:#1a1a1a;font-weight:600;">{html.escape(jour.get("temp_max", "?"))}</div>
-              <div style="font-size:12px;color:#A8A29E;">{html.escape(jour.get("temp_min", "?"))}</div>
+                    letter-spacing:0.04em;">{html.escape(_jour_court(jour["date"]))}</div>
+              {f'<div style="font-size:22px;margin:4px 0;">{_icone_meteo(jour["condition"])}</div>' if jour.get("condition") else ""}
+              {f'<div style="font-size:13px;color:#1a1a1a;font-weight:600;">{html.escape(jour["temp_max"])}</div>' if jour.get("temp_max") else ""}
+              {f'<div style="font-size:12px;color:#A8A29E;">{html.escape(jour["temp_min"])}</div>' if jour.get("temp_min") else ""}
             </div>'''
-        for jour in forecast[:3]
+        for jour in forecast
+        if jour.get("date")
     )
 
     return f'''
     <div style="background:linear-gradient(135deg,#FEF3E2,#FBF7F2);border:1px solid #F0D9B5;
           border-radius:16px;padding:20px;margin:12px 0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div>
-          <div style="font-size:13px;font-weight:600;color:#B45309;text-transform:uppercase;
-                letter-spacing:0.05em;">{html.escape(location)}</div>
-          <div style="font-size:36px;font-weight:700;color:#1a1a1a;margin-top:4px;">{html.escape(temperature)}</div>
-          <div style="font-size:14px;color:#57534E;margin-top:2px;">{html.escape(condition)}</div>
-          {f'<div style="font-size:12px;color:#78716C;margin-top:6px;">{details_html}</div>' if details_html else ''}
-        </div>
-        <div style="font-size:56px;">{_icone_meteo(condition)}</div>
-      </div>
-      {f'<div style="display:flex;gap:8px;margin-top:16px;">{cases_prevision}</div>' if cases_prevision else ''}
+      {f'<div style="display:flex;align-items:center;justify-content:space-between;"><div>{entete_html}</div>{icone_html}</div>' if (entete_html or icone_html) else ''}
+      {f'<div style="display:flex;gap:8px;margin-top:16px;overflow-x:auto;">{cases_prevision}</div>' if cases_prevision else ''}
     </div>'''
