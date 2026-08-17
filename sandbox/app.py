@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from .utils import call_mistral_api
-from agentAffichage.afficheur import afficherJoliment
+from agentAffichage.rendu.afficheur import afficherJoliment
 
 # QWebEngineView est importé de manière lazy pour éviter les crashs macOS
 _QWebEngineView = None

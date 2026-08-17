@@ -95,7 +95,7 @@ def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
     Le texte est interprété comme du Markdown (généré naturellement 
     par Mistral dans ses réponses.
     Les blocs ```widget:<type> sont extraits avant le parsing Markdown et
-    rendus séparément via le registre de composants (agentAffichage/registre.py).
+    rendus séparément via le registre de composants (agentAffichage/rendu/registre.py).
 
     Args:
         texte: Le texte à afficher (Markdown, avec blocs widget optionnels).
