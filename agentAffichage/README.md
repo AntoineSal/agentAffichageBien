@@ -72,27 +72,41 @@ pour être réutilisés par les prochains widgets plutôt que réécrits à chaq
 ## Structure des fichiers
 
 ```
-agentAffichage/
-├── README.md              ce document
-├── pipeline.py             (à venir, phase 3) orchestrateur bout-en-bout
-├── rendu/
-│   ├── afficheur.py         afficherJoliment() : Markdown + blocs widget → HTML
-│   └── registre.py           composants HTML purs (un par widget)
-└── selection/
-    ├── catalogue.py          (à venir, phase 1) widgets connus
-    ├── schemas.py             (à venir, phase 1) modèles de données par widget
-    ├── prompt.py               (à venir, phase 1) prompt de sélection
-    └── selecteur.py             (à venir, phase 2) appel Mistral de sélection
+agentAffichageBien/
+├── tests/
+│   └── test_selection_phase1.py   catalogue → prompt → schémas, sans appel API
+└── agentAffichage/
+    ├── README.md              ce document
+    ├── pipeline.py             (à venir, phase 3) orchestrateur bout-en-bout
+    ├── rendu/
+    │   ├── afficheur.py         afficherJoliment() : Markdown + blocs widget → HTML
+    │   └── registre.py           composants HTML purs (un par widget)
+    └── selection/
+        ├── schemas.py            modèles Pydantic (ResultatSelection, DonneesWeather...)
+        ├── catalogue.py           liste déclarative des widgets connus
+        ├── prompt.py               génère le prompt de sélection depuis le catalogue
+        └── selecteur.py            (à venir, phase 2) appel Mistral de sélection
 ```
 
 ## Catalogue des widgets
 
-| Widget | Statut | Rendu |
-|---|---|---|
-| `weather` | rendu fait, sélection à brancher | `registre.carte_meteo()` |
-| `lien`, `photo`, `calendrier`, `carte` | ciblés pour la v1, ordre et contenu à préciser en phase 4 | à créer |
+| Widget | Statut | Schéma | Rendu |
+|---|---|---|---|
+| `weather` | schéma prêt, appel Mistral à brancher (phase 2) | `selection/schemas.py::DonneesWeather` | `registre.carte_meteo()` |
+| `lien`, `photo`, `calendrier`, `carte` | ciblés pour la v1, ordre et contenu à préciser en phase 4 | à créer | à créer |
 
 `weather` est un widget pilote : c'est le seul déjà validé côté rendu, donc celui
 sur lequel le mécanisme de sélection sera prouvé en premier avant d'être dupliqué
 aux autres.
+
+## État d'avancement
+
+- [x] **Phase 0** — rangement physique (`rendu/` + `selection/`), ce document
+- [x] **Phase 0bis** — réécriture de `carte_meteo()` : plus de valeurs de repli, widgets extensibles (voir convention ci-dessus)
+- [x] **Phase 1** — fondations de la sélection sans appel LLM : `schemas.py`, `catalogue.py`, `prompt.py`, testés par `tests/test_selection_phase1.py`
+- [ ] **Phase 2** — premier appel Mistral réel, widget `weather` seul (`selecteur.py`)
+- [ ] **Phase 3** — orchestrateur `pipeline.py` + branchement dans le sandbox, avec fallback
+- [ ] **Phase 4** — extension aux widgets suivants
+- [ ] **Phase 5** — robustesse (grille de test manuelle)
+- [ ] **Phase 6** — bilan avec Antoine
 
