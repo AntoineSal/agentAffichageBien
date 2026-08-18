@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from .utils import call_mistral_api
 from agentAffichage.rendu.afficheur import afficherJoliment
+from agentAffichage.pipeline import genererAffichage
 
 # QWebEngineView est importé de manière lazy pour éviter les crashs macOS
 _QWebEngineView = None
@@ -410,14 +411,22 @@ class MainWindow(QMainWindow):
         self.messages.append({"role": "user", "content": prompt})
         self.msg_layout.insertWidget(self.msg_layout.count() - 1, UserMessageWidget(prompt, self.font_family))
 
+        fichiers = self.uploaded_files_objs if self.uploaded_files_objs else None
+
         if self.mode == "Utilisateur":
+            # Le curseur d'attente couvre les deux appels réseau enchaînés
+            # (conversation puis sélection de widget), pas juste le premier.
             QApplication.setOverrideCursor(Qt.WaitCursor)
             response = call_mistral_api(prompt, self.api_key)
+            html = genererAffichage(response, fichiers, api_key=self.api_key)
             QApplication.restoreOverrideCursor()
         else:
+            # Mode "Agent (Rendu Direct)" : on garde un accès direct au rendu
+            # seul, sans passer par la sélection — pour taper un bloc widget à
+            # la main et tester registre.py/afficheur.py isolément.
             response = prompt
+            html = afficherJoliment(response, fichiers)
 
-        html = afficherJoliment(response, self.uploaded_files_objs if self.uploaded_files_objs else None)
         self.messages.append({"role": "agent", "content": html})
         self.msg_layout.insertWidget(self.msg_layout.count() - 1, AgentMessageWidget(html, self.font_family))
 

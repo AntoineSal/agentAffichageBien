@@ -41,7 +41,9 @@ texte annoté (même texte + au plus un bloc ```widget:type{json}```)
   *comment* un widget a été choisi, seulement comment l'afficher.
 
 Cette séparation permet de modifier l'apparence d'un widget sans toucher à la
-logique de sélection, et inversement.
+logique de sélection, et inversement. `pipeline.py::genererAffichage()` est le
+seul point d'entrée qui enchaîne les deux étages ; c'est lui que `sandbox/app.py`
+appelle en mode *"Utilisateur (API Mistral)"*.
 
 ## Le contrat entre les deux étages
 
@@ -73,11 +75,14 @@ pour être réutilisés par les prochains widgets plutôt que réécrits à chaq
 
 ```
 agentAffichageBien/
+├── verifier_selection.py       vérification manuelle avec un vrai appel Mistral (clé requise)
 ├── tests/
-│   └── test_selection_phase1.py   catalogue → prompt → schémas, sans appel API
+│   ├── test_selection_phase1.py   catalogue → prompt → schémas, sans appel API
+│   ├── test_selecteur_phase2.py    selecteur.py avec un client Mistral simulé, sans appel API
+│   └── test_pipeline_phase3.py      genererAffichage() : succès, "aucun", et repli sur échec
 └── agentAffichage/
     ├── README.md              ce document
-    ├── pipeline.py             (à venir, phase 3) orchestrateur bout-en-bout
+    ├── pipeline.py             genererAffichage() : sélection puis rendu, avec repli
     ├── rendu/
     │   ├── afficheur.py         afficherJoliment() : Markdown + blocs widget → HTML
     │   └── registre.py           composants HTML purs (un par widget)
@@ -85,27 +90,52 @@ agentAffichageBien/
         ├── schemas.py            modèles Pydantic (ResultatSelection, DonneesWeather...)
         ├── catalogue.py           liste déclarative des widgets connus
         ├── prompt.py               génère le prompt de sélection depuis le catalogue
-        └── selecteur.py            (à venir, phase 2) appel Mistral de sélection
+        └── selecteur.py            selectionner_widget() : appel Mistral (SDK mistralai)
 ```
 
 ## Catalogue des widgets
 
 | Widget | Statut | Schéma | Rendu |
 |---|---|---|---|
-| `weather` | schéma prêt, appel Mistral à brancher (phase 2) | `selection/schemas.py::DonneesWeather` | `registre.carte_meteo()` |
+| `weather` | bout en bout, branché dans le sandbox (mode "Utilisateur (API Mistral)") | `selection/schemas.py::DonneesWeather` | `registre.carte_meteo()` |
 | `lien`, `photo`, `calendrier`, `carte` | ciblés pour la v1, ordre et contenu à préciser en phase 4 | à créer | à créer |
 
 `weather` est un widget pilote : c'est le seul déjà validé côté rendu, donc celui
-sur lequel le mécanisme de sélection sera prouvé en premier avant d'être dupliqué
-aux autres.
+sur lequel le mécanisme de sélection a été prouvé en premier avant d'être
+dupliqué aux autres (phase 4).
+
+## Appeler Mistral pour de vrai
+
+`selectionner_widget()` lit la clé API via son paramètre `api_key`, ou sinon la
+variable d'environnement `MISTRAL_API_KEY` (même convention que
+`sandbox/utils.py::call_mistral_api`). Pour tester `selectionner_widget()` seule,
+sans passer par le sandbox :
+
+```bash
+export MISTRAL_API_KEY="votre_clé"
+export PYTHONUTF8=1
+.venv/bin/python3 verifier_selection.py
+```
+
+`PYTHONUTF8=1` est nécessaire si votre shell n'exporte pas `LANG`/`LC_ALL` (cas
+constaté le 17/08/2026) : sans ça, une bibliothèque de la chaîne d'appel Mistral
+échoue avec une `UnicodeEncodeError` cryptique dès que le prompt de sélection
+contient un caractère accentué. `selectionner_widget()` détecte ce cas et lève
+une erreur claire plutôt que de laisser planter l'appel sans explication.
+
+Note : `.env`/`.env.example` existent dans le repo mais ne sont chargés
+automatiquement par aucun code actuellement (pas de `python-dotenv`) — seule la
+variable d'environnement exportée, ou le champ "Clé API Mistral" du sandbox,
+fonctionnent réellement aujourd'hui (les deux sont lus par `genererAffichage()`
+via `pipeline.py`, exactement comme `selectionner_widget()` seul).
 
 ## État d'avancement
 
 - [x] **Phase 0** — rangement physique (`rendu/` + `selection/`), ce document
 - [x] **Phase 0bis** — réécriture de `carte_meteo()` : plus de valeurs de repli, widgets extensibles (voir convention ci-dessus)
 - [x] **Phase 1** — fondations de la sélection sans appel LLM : `schemas.py`, `catalogue.py`, `prompt.py`, testés par `tests/test_selection_phase1.py`
-- [ ] **Phase 2** — premier appel Mistral réel, widget `weather` seul (`selecteur.py`)
-- [ ] **Phase 3** — orchestrateur `pipeline.py` + branchement dans le sandbox, avec fallback
+- [x] **Phase 2** — `selecteur.py` écrit, testé (client Mistral simulé), et vérifié avec un vrai appel Mistral (`verifier_selection.py`, 17/08/2026)
+- [x] **Phase 3** — `pipeline.py::genererAffichage()` + branchement dans `sandbox/app.py` (mode "Utilisateur" seulement ; "Agent (Rendu Direct)" continue d'appeler `afficherJoliment()` directement), fallback testé
 - [ ] **Phase 4** — extension aux widgets suivants
 - [ ] **Phase 5** — robustesse (grille de test manuelle)
 - [ ] **Phase 6** — bilan avec Antoine
