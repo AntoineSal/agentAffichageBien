@@ -289,12 +289,14 @@ class MainWindow(QMainWindow):
         s.addSpacing(6)
 
         self.radio_user = QRadioButton("Utilisateur (API Mistral)")
+        self.radio_selection = QRadioButton("Texte brut (Sélection + Rendu)")
         self.radio_agent = QRadioButton("Agent (Rendu Direct)")
         self.radio_user.setChecked(True)
-        for r in (self.radio_user, self.radio_agent):
+        for r in (self.radio_user, self.radio_selection, self.radio_agent):
             r.setStyleSheet(f"background: transparent; color: #44403C; font-size: 13px; font-family: '{ff}'; spacing: 8px;")
-        self.radio_user.toggled.connect(self._on_mode)
+            r.toggled.connect(self._on_mode)
         s.addWidget(self.radio_user)
+        s.addWidget(self.radio_selection)
         s.addWidget(self.radio_agent)
         s.addSpacing(8)
 
@@ -420,6 +422,14 @@ class MainWindow(QMainWindow):
             response = call_mistral_api(prompt, self.api_key)
             html = genererAffichage(response, fichiers, api_key=self.api_key)
             QApplication.restoreOverrideCursor()
+        elif self.mode == "SelectionRendu":
+            # Ce que l'on tape EST le texte brut, comme si c'était déjà la
+            # sortie de Mistral : on se branche directement à l'entrée de la
+            # pipeline (sélection + rendu), sans appel conversationnel.
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            response = prompt
+            html = genererAffichage(response, fichiers, api_key=self.api_key)
+            QApplication.restoreOverrideCursor()
         else:
             # Mode "Agent (Rendu Direct)" : on garde un accès direct au rendu
             # seul, sans passer par la sélection — pour taper un bloc widget à
@@ -501,5 +511,12 @@ class MainWindow(QMainWindow):
             self.files_lbl.setText(f"{len(paths)} fichier(s)\n" + ", ".join(os.path.basename(p) for p in paths))
 
     def _on_mode(self):
-        self.mode = "Utilisateur" if self.radio_user.isChecked() else "Agent"
-        self.api_input.setVisible(self.mode == "Utilisateur")
+        if self.radio_user.isChecked():
+            self.mode = "Utilisateur"
+        elif self.radio_selection.isChecked():
+            self.mode = "SelectionRendu"
+        else:
+            self.mode = "Agent"
+        # Les deux modes qui appellent Mistral ont besoin de la clé API ;
+        # "Agent (Rendu Direct)" n'appelle jamais Mistral.
+        self.api_input.setVisible(self.mode != "Agent")

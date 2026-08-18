@@ -104,6 +104,23 @@ agentAffichageBien/
 sur lequel le mécanisme de sélection a été prouvé en premier avant d'être
 dupliqué aux autres (phase 4).
 
+## Les trois modes du sandbox
+
+`sandbox/app.py` propose trois modes (boutons radio dans la barre latérale), qui
+ne font pas tourner les mêmes étages de la pipeline :
+
+| Mode | Ce qui tourne | Ce que le champ de saisie représente |
+|---|---|---|
+| **Utilisateur (API Mistral)** | conversation → sélection → rendu | une question posée à Mistral |
+| **Texte brut (Sélection + Rendu)** | sélection → rendu (pas de conversation) | le texte brut tel qu'il sortirait déjà de Mistral — on se branche directement à l'entrée de la pipeline |
+| **Agent (Rendu Direct)** | rendu seul | la réponse déjà formatée, avec un bloc `` ```widget:type{json}``` `` écrit à la main si besoin |
+
+Le mode **"Texte brut (Sélection + Rendu)"** est le plus utile pour tester la
+sélection sur des cas construits à la main (météo complète, partielle, absente,
+hors sujet...) sans dépendre de ce que le vrai Mistral (sans outil météo) est
+capable de répondre — collez-y directement un texte plausible et regardez si le
+bon widget apparaît, avec les bonnes données.
+
 ## Appeler Mistral pour de vrai
 
 `selectionner_widget()` lit la clé API via son paramètre `api_key`, ou sinon la
@@ -135,7 +152,7 @@ via `pipeline.py`, exactement comme `selectionner_widget()` seul).
 - [x] **Phase 0bis** — réécriture de `carte_meteo()` : plus de valeurs de repli, widgets extensibles (voir convention ci-dessus)
 - [x] **Phase 1** — fondations de la sélection sans appel LLM : `schemas.py`, `catalogue.py`, `prompt.py`, testés par `tests/test_selection_phase1.py`
 - [x] **Phase 2** — `selecteur.py` écrit, testé (client Mistral simulé), et vérifié avec un vrai appel Mistral (`verifier_selection.py`, 17/08/2026)
-- [x] **Phase 3** — `pipeline.py::genererAffichage()` + branchement dans `sandbox/app.py` (mode "Utilisateur" seulement ; "Agent (Rendu Direct)" continue d'appeler `afficherJoliment()` directement), fallback testé
+- [x] **Phase 3** — `pipeline.py::genererAffichage()` + branchement dans `sandbox/app.py`, fallback testé. Trois modes dans le sandbox (voir "Les trois modes du sandbox" ci-dessus) ; "Agent (Rendu Direct)" continue d'appeler `afficherJoliment()` directement
 - [ ] **Phase 4** — extension aux widgets suivants
 - [ ] **Phase 5** — robustesse (grille de test manuelle)
 - [ ] **Phase 6** — bilan avec Antoine
