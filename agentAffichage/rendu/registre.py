@@ -6,6 +6,8 @@ Chaque fonction transforme des données Python simples en un fragment HTML/CSS.
 
 import datetime
 import html
+import json
+import uuid
 from typing import Dict, List, Optional
 
 
@@ -143,4 +145,233 @@ def carte_meteo(data: Dict) -> str:
           border-radius:16px;padding:20px;margin:12px 0;">
       {f'<div style="display:flex;align-items:center;justify-content:space-between;"><div>{entete_html}</div>{icone_html}</div>' if (entete_html or icone_html) else ''}
       {f'<div style="display:flex;gap:8px;margin-top:16px;overflow-x:auto;">{cases_prevision}</div>' if cases_prevision else ''}
+    </div>'''
+
+
+# ─── Composant : IMAGE ───────────────────────────────────────────────────────
+
+def image(data: Dict) -> str:
+    url = data.get("url")
+    if not url:
+        return ""
+    pied = _joindre_fragments(data.get("legende") or "", _fragment("Source :", data.get("source")))
+    return f'''
+    <figure style="margin:12px 0;border:1px solid #E8E2DB;border-radius:14px;overflow:hidden;background:#FFFFFF;">
+      <img src="{html.escape(url)}" alt="{html.escape(data.get("alt", ""))}"
+           style="display:block;width:100%;max-height:420px;object-fit:cover;">
+      {f'<figcaption style="padding:10px 14px;font-size:13px;color:#57534E;">{pied}</figcaption>' if pied else ''}
+    </figure>'''
+
+
+# ─── Composant : TABLE ───────────────────────────────────────────────────────
+
+def tableau(data: Dict) -> str:
+    colonnes = data.get("colonnes") or []
+    if not colonnes:
+        return ""
+    lignes = data.get("lignes") or []
+    titre = data.get("titre")
+    entetes = "".join(
+        f'<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:700;'
+        f'text-transform:uppercase;letter-spacing:0.04em;color:#A8A29E;background:#FBF7F2;'
+        f'border-bottom:1px solid #E8E2DB;position:sticky;top:0;">{html.escape(c)}</th>'
+        for c in colonnes
+    )
+    corps = "".join(
+        "<tr>" + "".join(
+            f'<td style="padding:8px 12px;font-size:13.5px;color:#292524;'
+            f'border-bottom:1px solid #F0EEEA;">{html.escape(str(cellule))}</td>'
+            for cellule in ligne
+        ) + "</tr>"
+        for ligne in lignes
+    )
+    return f'''
+    <div style="margin:12px 0;">
+      {f'<div style="font-size:13px;font-weight:600;color:#B45309;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">{html.escape(titre)}</div>' if titre else ''}
+      <div style="border:1px solid #E8E2DB;border-radius:12px;overflow:auto;max-height:360px;">
+        <table style="border-collapse:collapse;width:100%;">
+          <thead><tr>{entetes}</tr></thead>
+          <tbody>{corps}</tbody>
+        </table>
+      </div>
+    </div>'''
+
+
+# ─── Composant : CODE (coloration syntaxique via highlight.js, CDN) ─────────
+
+def code(data: Dict) -> str:
+    contenu = data.get("code")
+    if not contenu:
+        return ""
+    langage = (data.get("langage") or "").lower()
+    titre = data.get("titre")
+    classe_langage = f"language-{langage}" if langage else ""
+    id_bloc = f"code-{uuid.uuid4().hex[:8]}"
+    return f'''
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <div style="margin:12px 0;border:1px solid #E8E2DB;border-radius:12px;overflow:hidden;">
+      {f'<div style="padding:8px 14px;background:#F5F0EB;font-size:12px;font-weight:600;color:#57534E;border-bottom:1px solid #E8E2DB;">{html.escape(titre)}</div>' if titre else ''}
+      <pre style="margin:0;padding:14px;overflow-x:auto;background:#FFFFFF;"><code id="{id_bloc}" class="{classe_langage}">{html.escape(contenu)}</code></pre>
+    </div>
+    <script>
+      (function() {{
+        var essayer = function() {{
+          if (window.hljs) {{ hljs.highlightElement(document.getElementById("{id_bloc}")); }}
+          else {{ setTimeout(essayer, 50); }}
+        }};
+        essayer();
+      }})();
+    </script>'''
+
+
+# ─── Composant : FILE ────────────────────────────────────────────────────────
+
+_ICONES_FICHIER = {
+    "pdf": "📄", "docx": "📝", "doc": "📝", "xlsx": "📊", "xls": "📊",
+    "pptx": "📽️", "ppt": "📽️", "csv": "📊", "zip": "🗜️", "txt": "📃",
+}
+
+
+def _extension(url: str) -> str:
+    nom = url.rsplit("/", 1)[-1]
+    return nom.rsplit(".", 1)[-1].lower() if "." in nom else ""
+
+
+def fichier(data: Dict) -> str:
+    url = data.get("url")
+    if not url:
+        return ""
+    ext = (data.get("type_fichier") or _extension(url)).lower()
+    icone = _ICONES_FICHIER.get(ext, "📎")
+    nom = data.get("nom") or url.rsplit("/", 1)[-1]
+    sous_texte = _joindre_fragments(ext.upper() if ext else "", data.get("taille") or "")
+    return f'''
+    <a href="{html.escape(url)}" target="_blank" rel="noopener" style="display:flex;align-items:center;
+          gap:12px;text-decoration:none;background:#FBF7F2;border:1px solid #E8E2DB;border-radius:12px;
+          padding:12px 16px;margin:12px 0;">
+      <div style="font-size:28px;">{icone}</div>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:#1a1a1a;">{html.escape(nom)}</div>
+        {f'<div style="font-size:12px;color:#78716C;margin-top:2px;">{sous_texte}</div>' if sous_texte else ''}
+      </div>
+    </a>'''
+
+
+# ─── Composant : CARD ────────────────────────────────────────────────────────
+
+def carte(data: Dict) -> str:
+    titre = data.get("titre")
+    if not titre:
+        return ""
+    sous_titre = data.get("sous_titre")
+    lignes = "".join(
+        f'''<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;
+                border-bottom:1px solid #F0EEEA;">
+              <span style="font-size:13px;color:#78716C;">{html.escape(a.get("label", ""))}</span>
+              <span style="font-size:13px;font-weight:600;color:#1a1a1a;text-align:right;">{html.escape(str(a.get("valeur", "")))}</span>
+            </div>'''
+        for a in (data.get("attributs") or [])
+        if a.get("label") and a.get("valeur") is not None
+    )
+    return f'''
+    <div style="margin:12px 0;padding:18px 20px;background:#FFFFFF;border:1px solid #E8E2DB;border-radius:14px;">
+      <div style="font-size:17px;font-weight:700;color:#1a1a1a;">{html.escape(titre)}</div>
+      {f'<div style="font-size:13px;color:#A8A29E;margin-top:2px;">{html.escape(sous_titre)}</div>' if sous_titre else ''}
+      {f'<div style="margin-top:12px;">{lignes}</div>' if lignes else ''}
+    </div>'''
+
+
+# ─── Composant : CHART (via Chart.js, CDN) ───────────────────────────────────
+
+_COULEURS_GRAPHIQUE = ["#D97706", "#B45309", "#78716C", "#A8A29E", "#92400E"]
+_TYPE_CHARTJS = {"ligne": "line", "barres": "bar", "secteurs": "pie", "nuage_points": "scatter"}
+
+
+def graphique(data: Dict) -> str:
+    type_graphique = data.get("type_graphique")
+    series = data.get("series") or []
+    if not type_graphique or not series:
+        return ""
+    type_js = _TYPE_CHARTJS.get(type_graphique, "bar")
+    datasets = [
+        {
+            "label": s.get("nom") or f"Série {i + 1}",
+            "data": s.get("valeurs", []),
+            "borderColor": _COULEURS_GRAPHIQUE[i % len(_COULEURS_GRAPHIQUE)],
+            "backgroundColor": _COULEURS_GRAPHIQUE[i % len(_COULEURS_GRAPHIQUE)]
+            if type_js in ("bar", "pie") else "transparent",
+        }
+        for i, s in enumerate(series)
+    ]
+    config = {
+        "type": type_js,
+        "data": {"labels": data.get("categories") or [], "datasets": datasets},
+        "options": {"responsive": True, "plugins": {"legend": {"display": len(datasets) > 1}}},
+    }
+    id_graph = f"chart-{uuid.uuid4().hex[:8]}"
+    titre = data.get("titre")
+    return f'''
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <div style="margin:12px 0;padding:16px;border:1px solid #E8E2DB;border-radius:14px;background:#FFFFFF;">
+      {f'<div style="font-size:13px;font-weight:600;color:#B45309;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">{html.escape(titre)}</div>' if titre else ''}
+      <canvas id="{id_graph}" style="max-height:280px;"></canvas>
+    </div>
+    <script>
+      (function() {{
+        var essayer = function() {{
+          if (window.Chart) {{ new Chart(document.getElementById("{id_graph}"), {json.dumps(config)}); }}
+          else {{ setTimeout(essayer, 50); }}
+        }};
+        essayer();
+      }})();
+    </script>'''
+
+
+# ─── Composant : STATS ───────────────────────────────────────────────────────
+
+def statistiques(data: Dict) -> str:
+    cases = "".join(
+        f'''<div style="flex:1;min-width:120px;padding:14px;background:#FBF7F2;
+                border:1px solid #E8E2DB;border-radius:12px;">
+              <div style="font-size:11px;font-weight:600;color:#A8A29E;text-transform:uppercase;
+                    letter-spacing:0.04em;">{html.escape(ind.get("label", ""))}</div>
+              <div style="font-size:24px;font-weight:700;color:#1a1a1a;margin-top:4px;">{html.escape(str(ind.get("valeur", "")))}</div>
+              {f'<div style="font-size:12px;color:#B45309;margin-top:2px;font-weight:600;">{html.escape(ind["tendance"])}</div>' if ind.get("tendance") else ''}
+            </div>'''
+        for ind in (data.get("indicateurs") or [])
+        if ind.get("label") and ind.get("valeur") is not None
+    )
+    if not cases:
+        return ""
+    titre = data.get("titre")
+    return f'''
+    <div style="margin:12px 0;">
+      {f'<div style="font-size:13px;font-weight:600;color:#B45309;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">{html.escape(titre)}</div>' if titre else ''}
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">{cases}</div>
+    </div>'''
+
+
+# ─── Composant : TIMELINE ────────────────────────────────────────────────────
+
+def chronologie(data: Dict) -> str:
+    evenements = [e for e in (data.get("evenements") or []) if e.get("date") and e.get("titre")]
+    if not evenements:
+        return ""
+    titre = data.get("titre")
+    items = "".join(
+        f'''<div style="position:relative;padding:0 0 18px 22px;border-left:2px solid #E8E2DB;">
+              <div style="position:absolute;left:-6px;top:2px;width:10px;height:10px;
+                    border-radius:50%;background:#D97706;"></div>
+              <div style="font-size:11px;font-weight:600;color:#B45309;text-transform:uppercase;
+                    letter-spacing:0.04em;">{html.escape(e["date"])}</div>
+              <div style="font-size:14px;font-weight:600;color:#1a1a1a;margin-top:2px;">{html.escape(e["titre"])}</div>
+              {f'<div style="font-size:13px;color:#57534E;margin-top:2px;">{html.escape(e["description"])}</div>' if e.get("description") else ''}
+            </div>'''
+        for e in evenements
+    )
+    return f'''
+    <div style="margin:12px 0;">
+      {f'<div style="font-size:13px;font-weight:600;color:#B45309;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">{html.escape(titre)}</div>' if titre else ''}
+      <div style="margin-left:4px;">{items}</div>
     </div>'''

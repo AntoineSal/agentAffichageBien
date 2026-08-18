@@ -1,0 +1,10 @@
+Plusieurs problèmes à régler :
+- Pour certains graphiques, et pourle camembert en particulier, toutes les parts sont exactement de la même couleur, ce qui fait ... un rond. Il faut changer les couleurs.
+- J'aimerais que tu me crée une palette de couleurs qui puisse être utilisée pour tous les widgets. £Change également la couleur primaire de la sandbox.
+La couleur PRINCIPALE : ECHO_COLOR = dynamicColor("rgba(10, 145, 104, 0.8)", "rgba(22, 185, 134, 0.85)"); c'est ue sorte de vert.
+J'aimerais que dans cette palette tu inclues des variations de ce vert, plus foncées, plkus claires, des couleurs différentes quicomplètent bien, et que tu les utilises dans les widgets à bon escient.
+- j'ai remplacé le lien fictif de photo avec un vrai lien de photo, mais rien de s'affiche sur la sandbox. Aussi, pour les lien des photos en particulier, j'aimerais que le lien n'apparaisse plus en texte, et qu'il n'y ait que la photo.
+
+
+À ne pas implémenter tout de suite, mais juste dis mois dans le chat :
+j'aimerais mettre dans la sandbox une sorte de "console", où pour chaque conversation, pour chaque message qui passe par la pipeline de selection (que ce soit via l'API Mistral ou par une entrée utilisateur selection+rendu), je voie exactement ce que le LLM a décidé.

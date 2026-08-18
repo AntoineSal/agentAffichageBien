@@ -26,6 +26,19 @@ _WIDGET_BLOCK_RE = re.compile(r"```widget:(\w+)\s*\n(.*?)\n```", re.DOTALL)
 # Dispatch type de widget -> fonction du registre. Chaque fonction reçoit le
 # JSON décodé du bloc et renvoie un fragment HTML autonome.
 _REGISTRE_WIDGETS = {
+    # Widgets génériques (catalogue actif de la sélection, voir
+    # agentAffichage/selection/catalogue.py) :
+    "image": registre.image,
+    "table": registre.tableau,
+    "code": registre.code,
+    "file": registre.fichier,
+    "card": registre.carte,
+    "chart": registre.graphique,
+    "stats": registre.statistiques,
+    "timeline": registre.chronologie,
+    # Composants de base et widget météo : plus proposés par la sélection
+    # actuelle, mais toujours utilisables à la main (mode "Agent (Rendu
+    # Direct)" du sandbox) — rien n'est supprimé côté rendu.
     "weather": registre.carte_meteo,
     "titre": lambda data: registre.titre(data.get("texte", ""), data.get("niveau", 2)),
     "paragraphe": lambda data: registre.paragraphe(data.get("texte", "")),

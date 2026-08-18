@@ -6,9 +6,11 @@ lancer l'application de test, voir le [README à la racine](../README.md).
 ## Objectif
 
 Transformer la réponse brute de Mistral (Markdown naturel, sans connaissance des
-widgets) en un affichage HTML enrichi, quand un widget peut apporter quelque chose
-visuellement (météo, lien, photo...). Le module est découpé en deux étages
-indépendants, qui ne communiquent que par du texte.
+widgets) en un affichage HTML enrichi, quand un widget apporte une valeur
+substantiellement meilleure que le Markdown seul — jamais parce que le contenu
+correspond juste techniquement au format d'un widget (voir "Philosophie" plus
+bas). Le module est découpé en deux étages indépendants, qui ne communiquent
+que par du texte.
 
 ## Architecture en deux étages
 
@@ -16,12 +18,12 @@ indépendants, qui ne communiquent que par du texte.
 texte brut (Mistral)
         │
         ▼
-┌───────────────────┐   décide QUOI afficher : quel widget (ou aucun),
+┌───────────────────┐   décide QUOI afficher : 0, 1 ou plusieurs widgets,
 │     sélection      │   et extrait les données depuis le texte
 └───────────────────┘
         │
         ▼
-texte annoté (même texte + au plus un bloc ```widget:type{json}```)
+texte annoté (même texte + 0 à 3 blocs ```widget:type{json}```)
         │
         ▼
 ┌───────────────────┐   décide COMMENT l'afficher : Markdown → HTML,
@@ -48,18 +50,19 @@ appelle en mode *"Utilisateur (API Mistral)"*.
 ## Le contrat entre les deux étages
 
 La sélection ne retourne jamais de HTML ni d'objet Python, seulement le texte
-d'origine, avec au plus un bloc en plus, dans le format que `rendu/afficheur.py`
-sait déjà parser :
+d'origine, avec 0 à 3 blocs en plus (souvent 0), dans le format que
+`rendu/afficheur.py` sait déjà parser — et qui accepte nativement plusieurs
+blocs dans un même texte, sans rien y changer :
 
 ```
-Bien sûr ! Voici les prévisions pour Paris : il fait 18°C, pluie légère...
+Chiffre d'affaires : 420 M€. Croissance : +12%. Marge : 24%. Employés : 4 200.
 
-​```widget:weather
-{"location": "Paris", "current": {"temperature": "18°C", "condition": "Pluie légère"}, "forecast": [...]}
+​```widget:stats
+{"indicateurs": [{"label": "Chiffre d'affaires", "valeur": "420 M€", "tendance": "+12%"}, ...]}
 ​```
 ```
 
-Ce format est stable et ne change pas au fil des phases suivantes.
+Ce format est stable et ne change pas selon le catalogue de widgets actif.
 
 ### Convention : widgets extensibles, jamais de valeur de repli
 
@@ -77,32 +80,73 @@ pour être réutilisés par les prochains widgets plutôt que réécrits à chaq
 agentAffichageBien/
 ├── verifier_selection.py       vérification manuelle avec un vrai appel Mistral (clé requise)
 ├── tests/
-│   ├── test_selection_phase1.py   catalogue → prompt → schémas, sans appel API
+│   ├── test_selection_phase1.py   catalogue (8 widgets) → prompt → schémas, sans appel API
 │   ├── test_selecteur_phase2.py    selecteur.py avec un client Mistral simulé, sans appel API
-│   └── test_pipeline_phase3.py      genererAffichage() : succès, "aucun", et repli sur échec
+│   ├── test_pipeline_phase3.py      genererAffichage() : 0/1/plusieurs widgets, et repli sur échec
+│   └── test_registre_widgets.py      les 8 fonctions de rendu, cas remplis et cas vides
 └── agentAffichage/
     ├── README.md              ce document
     ├── pipeline.py             genererAffichage() : sélection puis rendu, avec repli
     ├── rendu/
-    │   ├── afficheur.py         afficherJoliment() : Markdown + blocs widget → HTML
+    │   ├── afficheur.py         afficherJoliment() : Markdown + blocs widget(s) → HTML
     │   └── registre.py           composants HTML purs (un par widget)
     └── selection/
-        ├── schemas.py            modèles Pydantic (ResultatSelection, DonneesWeather...)
-        ├── catalogue.py           liste déclarative des widgets connus
+        ├── schemas.py            modèles Pydantic (union discriminée sur "type", liste de widgets)
+        ├── catalogue.py           liste déclarative des 8 widgets connus (objectif/quand/quand pas)
         ├── prompt.py               génère le prompt de sélection depuis le catalogue
         └── selecteur.py            selectionner_widget() : appel Mistral (SDK mistralai)
 ```
 
+## Philosophie
+
+Contrainte de départ : l'agent conversationnel qui produit le Markdown **n'est
+jamais modifié** et ignore l'existence des widgets — la sélection ne dispose
+que du texte Markdown déjà écrit comme entrée. Elle ne doit jamais inventer une
+information absente de ce texte.
+
+Règle centrale, plus importante que tout le reste : **un widget ne doit être
+créé que s'il apporte une valeur substantiellement meilleure que le Markdown**,
+jamais parce que le contenu correspond juste techniquement à un format de
+widget. Les faux positifs sont pires que les faux négatifs — une réponse sans
+aucun widget est souvent le bon résultat.
+
+Exemple qui résume tout : *"La température extérieure est de 15°C."* ne doit
+**pas** générer de widget (la phrase suffit). *"Les températures seront de
+15°C lundi, 18°C mardi, 21°C mercredi et 17°C jeudi."* **peut** justifier un
+graphique (`chart`), parce que l'évolution devient nettement plus lisible.
+
+Le texte complet du prompt (avec les 12 étapes de la démarche de décision) est
+généré par `selection/prompt.py::construire_prompt_selection()` — à lire
+directement plutôt que dupliqué ici, pour ne jamais diverger de ce que Mistral
+reçoit réellement.
+
 ## Catalogue des widgets
 
-| Widget | Statut | Schéma | Rendu |
-|---|---|---|---|
-| `weather` | bout en bout, branché dans le sandbox (mode "Utilisateur (API Mistral)") | `selection/schemas.py::DonneesWeather` | `registre.carte_meteo()` |
-| `lien`, `photo`, `calendrier`, `carte` | ciblés pour la v1, ordre et contenu à préciser en phase 4 | à créer | à créer |
+Liste fermée à 8 widgets génériques (pas de widget spécifique à un domaine
+comme la météo ou le calendrier — n'importe quel domaine se représente via
+l'un de ces 8 types structurels) :
 
-`weather` est un widget pilote : c'est le seul déjà validé côté rendu, donc celui
-sur lequel le mécanisme de sélection a été prouvé en premier avant d'être
-dupliqué aux autres (phase 4).
+| Widget | Rôle | Déclencheur typique |
+|---|---|---|
+| `image` | image déjà référencée par une URL utilisable | image Markdown ou URL directe |
+| `table` | tableau interactif (tri/filtre/recherche) | tableau volumineux, pas un petit tableau Markdown |
+| `code` | visionneuse de code (coloration syntaxique) | un vrai bloc de code, pas un fragment inline |
+| `file` | fichier téléchargeable référencé | lien Markdown vers un PDF/DOCX/XLSX/CSV/ZIP... |
+| `card` | entité avec plusieurs attributs distincts | personne, entreprise, produit, lieu... décrits en détail |
+| `chart` | série temporelle ou comparaison entre entités | plusieurs valeurs comparables, pas un chiffre isolé |
+| `stats` | quelques indicateurs numériques clés | KPI, plusieurs mesures ensemble |
+| `timeline` | séquence chronologique d'événements distincts | plusieurs dates formant une progression |
+
+Détail complet (objectif, quand l'utiliser, quand surtout pas, exemples
+positifs/négatifs) dans `selection/catalogue.py`.
+
+**Note sur `weather`** : retiré du catalogue actif (il n'appartient pas à la
+liste fermée des 8 types) suite à un retour direct de l'utilisateur sur des
+problèmes non encore résolus avec ce widget. `registre.carte_meteo()` et son
+entrée de dispatch dans `afficheur.py` restent en place, inchangés — un bloc
+`` ```widget:weather{...}``` `` écrit à la main (mode "Agent (Rendu Direct)")
+continue de fonctionner. Rien n'est supprimé, juste plus proposé par la
+sélection en l'état actuel.
 
 ## Les trois modes du sandbox
 
@@ -153,7 +197,7 @@ via `pipeline.py`, exactement comme `selectionner_widget()` seul).
 - [x] **Phase 1** — fondations de la sélection sans appel LLM : `schemas.py`, `catalogue.py`, `prompt.py`, testés par `tests/test_selection_phase1.py`
 - [x] **Phase 2** — `selecteur.py` écrit, testé (client Mistral simulé), et vérifié avec un vrai appel Mistral (`verifier_selection.py`, 17/08/2026)
 - [x] **Phase 3** — `pipeline.py::genererAffichage()` + branchement dans `sandbox/app.py`, fallback testé. Trois modes dans le sandbox (voir "Les trois modes du sandbox" ci-dessus) ; "Agent (Rendu Direct)" continue d'appeler `afficherJoliment()` directement
-- [ ] **Phase 4** — extension aux widgets suivants
-- [ ] **Phase 5** — robustesse (grille de test manuelle)
+- [x] **Refonte (18/08/2026)** — catalogue remplacé par les 8 widgets génériques (IMAGE/TABLE/CODE/FILE/CARD/CHART/STATS/TIMELINE) sur spec détaillée de l'utilisateur, remplace l'approche par domaine (weather/lien/photo/calendrier/carte) prévue en phase 4. Sélection multi-widgets (0 à 3 par réponse). `weather` retiré du catalogue actif, code de rendu conservé. 42/42 tests passent (schémas, catalogue, prompt, sélecteur simulé, pipeline, 8 fonctions de rendu). **Pas encore vérifié avec un vrai appel Mistral** — l'union discriminée dans une liste est un terrain nouveau pour les Custom Structured Outputs, à tester en conditions réelles (`verifier_selection.py`, exemples mis à jour) avant de considérer la sélection multi-widgets fiable.
+- [ ] **Phase 5** — robustesse (grille de test manuelle) sur le nouveau catalogue
 - [ ] **Phase 6** — bilan avec Antoine
 
