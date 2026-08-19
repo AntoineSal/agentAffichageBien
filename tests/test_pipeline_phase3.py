@@ -1,19 +1,24 @@
 """
-pipeline.py : orchestration sélection -> rendu (0, 1 ou plusieurs widgets), et
-fallback en cas d'échec. selectionner_widget est simulée partout ici — aucun
-appel réseau.
+pipeline.py : orchestration sélection -> filtrage par seuil de confiance ->
+rendu (0, 1 ou plusieurs widgets), et fallback en cas d'échec.
+selectionner_widget est simulée partout ici — aucun appel réseau.
 """
 
 from unittest.mock import patch
 
 from agentAffichage.pipeline import genererAffichage
+from agentAffichage.selection.confiance import SEUIL_AFFICHAGE
 from agentAffichage.selection.schemas import ResultatSelection
 
 
+def _candidat(type_, confidence, **donnees):
+    return {"type": type_, "confidence": confidence, "raison": "test", "donnees": donnees}
+
+
 @patch("agentAffichage.pipeline.selectionner_widget")
-def test_un_widget_choisi_est_rendu(mock_selectionner):
-    mock_selectionner.return_value = ResultatSelection(widgets=[
-        {"type": "stats", "donnees": {"indicateurs": [{"label": "CA", "valeur": "420 M€"}]}},
+def test_candidat_au_dessus_du_seuil_est_rendu(mock_selectionner):
+    mock_selectionner.return_value = ResultatSelection(candidats=[
+        _candidat("stats", SEUIL_AFFICHAGE + 0.1, indicateurs=[{"label": "CA", "valeur": "420 M€"}]),
     ])
 
     html = genererAffichage("Le chiffre d'affaires est de 420 M€.")
@@ -22,20 +27,35 @@ def test_un_widget_choisi_est_rendu(mock_selectionner):
 
 
 @patch("agentAffichage.pipeline.selectionner_widget")
-def test_plusieurs_widgets_choisis_sont_tous_rendus(mock_selectionner):
-    mock_selectionner.return_value = ResultatSelection(widgets=[
-        {"type": "card", "donnees": {"titre": "Apple Inc.", "attributs": [{"label": "PDG", "valeur": "Tim Cook"}]}},
-        {"type": "timeline", "donnees": {"evenements": [{"date": "1976", "titre": "Fondation"}]}},
+def test_candidat_sous_le_seuil_nest_pas_rendu(mock_selectionner):
+    mock_selectionner.return_value = ResultatSelection(candidats=[
+        _candidat("stats", SEUIL_AFFICHAGE - 0.1, indicateurs=[{"label": "CA", "valeur": "420 M€"}]),
     ])
 
-    html = genererAffichage("Petit historique d'Apple.")
+    html = genererAffichage("Bonjour, comment vas-tu ?")
 
-    assert "Apple Inc." in html and "Tim Cook" in html
-    assert "1976" in html and "Fondation" in html
+    # Le texte source reste affiché (repli), mais aucune carte de stats n'est
+    # injectée : la ligne "CA" du candidat rejeté ne doit apparaître nulle part.
+    assert "Bonjour" in html
+    assert "widget:" not in html
+    assert "CA" not in html
 
 
 @patch("agentAffichage.pipeline.selectionner_widget")
-def test_aucun_widget_rend_juste_le_texte(mock_selectionner):
+def test_seuls_les_candidats_retenus_sont_rendus_parmi_plusieurs(mock_selectionner):
+    mock_selectionner.return_value = ResultatSelection(candidats=[
+        _candidat("card", 0.91, titre="Apple Inc.", attributs=[{"label": "PDG", "valeur": "Tim Cook"}]),
+        _candidat("stats", 0.42, indicateurs=[{"label": "Fondation", "valeur": "1976"}]),
+    ])
+
+    html = genererAffichage("Petit résumé d'Apple.")
+
+    assert "Apple Inc." in html and "Tim Cook" in html
+    assert "widget:stats" not in html
+
+
+@patch("agentAffichage.pipeline.selectionner_widget")
+def test_aucun_candidat_rend_juste_le_texte(mock_selectionner):
     mock_selectionner.return_value = ResultatSelection()
 
     html = genererAffichage("Bonjour, comment vas-tu ?")

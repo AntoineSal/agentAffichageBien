@@ -4,7 +4,58 @@ n'affichent rien pour ce qui est absent (même convention que carte_meteo), et
 ne plantent jamais sur une entrée vide ou partielle.
 """
 
-from agentAffichage.rendu import registre
+import json
+import re
+
+from agentAffichage.rendu import palette, registre
+
+
+def _config_chartjs(html: str) -> dict:
+    m = re.search(r'new Chart\(document\.getElementById\("chart-\w+"\), (\{.*?\})\);', html, re.DOTALL)
+    return json.loads(m.group(1))
+
+
+def test_camembert_donne_une_couleur_differente_par_part():
+    """Bug rapporté : toutes les parts du camembert étaient de la même couleur."""
+    html = registre.graphique({
+        "type_graphique": "secteurs",
+        "categories": ["A", "B", "C", "D"],
+        "series": [{"valeurs": [10, 20, 30, 40]}],
+    })
+    couleurs = _config_chartjs(html)["data"]["datasets"][0]["backgroundColor"]
+    assert isinstance(couleurs, list) and len(couleurs) == 4
+    assert len(set(couleurs)) == 4
+
+
+def test_camembert_affiche_toujours_la_legende():
+    html = registre.graphique({
+        "type_graphique": "secteurs",
+        "categories": ["A", "B"],
+        "series": [{"valeurs": [1, 2]}],
+    })
+    assert _config_chartjs(html)["options"]["plugins"]["legend"]["display"] is True
+
+
+def test_ligne_multi_series_une_couleur_par_serie():
+    html = registre.graphique({
+        "type_graphique": "ligne",
+        "categories": ["Lun", "Mar"],
+        "series": [{"valeurs": [1, 2]}, {"valeurs": [3, 4]}],
+    })
+    config = _config_chartjs(html)
+    couleurs = [d["borderColor"] for d in config["data"]["datasets"]]
+    assert len(set(couleurs)) == 2
+
+
+def test_registre_nutilise_plus_lancienne_couleur_ambre():
+    rendu = "".join([
+        registre.carte_meteo({"location": "Paris", "current": {"temperature": "18°C"}}),
+        registre.carte({"titre": "X", "attributs": [{"label": "a", "valeur": "b"}]}),
+        registre.statistiques({"indicateurs": [{"label": "a", "valeur": "1", "tendance": "+1%"}]}),
+        registre.chronologie({"evenements": [{"date": "2020", "titre": "X"}]}),
+    ])
+    assert "#D97706" not in rendu and "#B45309" not in rendu
+    assert palette.VERT in rendu or palette.VERT_FONCE in rendu
 
 
 def test_image_rend_url_et_legende():
@@ -15,6 +66,14 @@ def test_image_rend_url_et_legende():
 
 def test_image_vide_sans_url_ne_rend_rien():
     assert registre.image({}) == ""
+
+
+def test_image_a_un_repli_visible_si_le_chargement_echoue():
+    """Avant : une URL cassée ne montrait littéralement rien. onerror doit
+    révéler un message plutôt que laisser un silence total."""
+    html = registre.image({"url": "https://exemple.com/introuvable.jpg"})
+    assert "onerror=" in html
+    assert "Image indisponible" in html
 
 
 def test_tableau_rend_colonnes_et_lignes():

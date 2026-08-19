@@ -7,14 +7,15 @@ import sys
 from typing import List, Optional
 
 from .rendu.afficheur import afficherJoliment
-from .selection.schemas import ResultatSelection
+from .selection.confiance import widgets_retenus
+from .selection.schemas import WidgetCandidat
 from .selection.selecteur import selectionner_widget
 
 
-def _construire_blocs_widgets(resultat: ResultatSelection) -> List[str]:
+def _construire_blocs_widgets(candidats: List[WidgetCandidat]) -> List[str]:
     return [
         f"```widget:{widget.type}\n{widget.donnees.model_dump_json(exclude_none=True)}\n```"
-        for widget in resultat.widgets
+        for widget in candidats
     ]
 
 
@@ -33,7 +34,7 @@ def genererAffichage(
     texte_annote = texte_brut
     try:
         resultat = selectionner_widget(texte_brut, api_key=api_key)
-        blocs = _construire_blocs_widgets(resultat)
+        blocs = _construire_blocs_widgets(widgets_retenus(resultat))
         if blocs:
             texte_annote = texte_brut + "\n\n" + "\n\n".join(blocs)
     except Exception as exc:

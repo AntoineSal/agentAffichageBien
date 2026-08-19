@@ -1,6 +1,7 @@
 """
 Application Desktop PySide6 — Agent Affichage Sandbox.
-DA premium : palette chaude ambre/crème, typographie propre, rendu Chromium étanche.
+DA premium : vert EchoSocial sur fond crème neutre, typographie propre, rendu
+Chromium étanche. Couleur d'accent partagée avec agentAffichage/rendu/palette.py.
 """
 
 import sys
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from .utils import call_mistral_api
 from agentAffichage.rendu.afficheur import afficherJoliment
+from agentAffichage.rendu import palette as pal
 from agentAffichage.pipeline import genererAffichage
 
 # QWebEngineView est importé de manière lazy pour éviter les crashs macOS
@@ -101,7 +103,7 @@ class AgentMessageWidget(QWidget):
         avatar.setFixedSize(30, 30)
         avatar.setAlignment(Qt.AlignCenter)
         avatar.setStyleSheet(
-            f"background-color: #D97706; color: #fff; border-radius: 15px;"
+            f"background-color: {pal.VERT}; color: #fff; border-radius: 15px;"
             f"font-weight: bold; font-size: 12px; font-family: '{font_family}';"
         )
         layout.addWidget(avatar, alignment=Qt.AlignTop)
@@ -183,9 +185,9 @@ class PromptBarWidget(QWidget):
         btn.setFixedHeight(32)
         btn.setStyleSheet(
             f"QPushButton {{"
-            f"  background-color: #D97706;"
+            f"  background-color: {pal.VERT};"
             f"  color: #ffffff;"
-            f"  border: 1px solid #D97706;"
+            f"  border: 1px solid {pal.VERT};"
             f"  border-radius: 16px;"
             f"  padding: 0px 18px;"
             f"  font-size: 13px;"
@@ -193,12 +195,12 @@ class PromptBarWidget(QWidget):
             f"  font-family: '{font_family}';"
             f"}}"
             f"QPushButton:hover {{"
-            f"  background-color: #B45309;"
-            f"  border-color: #B45309;"
+            f"  background-color: {pal.VERT_FONCE};"
+            f"  border-color: {pal.VERT_FONCE};"
             f"}}"
             f"QPushButton:pressed {{"
-            f"  background-color: #92400E;"
-            f"  border-color: #92400E;"
+            f"  background-color: {pal.VERT_PRESSE};"
+            f"  border-color: {pal.VERT_PRESSE};"
             f"}}"
         )
         btn.clicked.connect(self._submit)
@@ -261,13 +263,13 @@ class MainWindow(QMainWindow):
         s.addWidget(lbl_t)
 
         lbl_s = QLabel("Sandbox de Visualisation")
-        lbl_s.setStyleSheet(f"font-size: 12px; font-weight: 500; color: #D97706; margin-bottom: 18px; background: transparent; font-family: '{ff}';")
+        lbl_s.setStyleSheet(f"font-size: 12px; font-weight: 500; color: {pal.VERT_FONCE}; margin-bottom: 18px; background: transparent; font-family: '{ff}';")
         s.addWidget(lbl_s)
 
         btn_new = QPushButton("Nouveau chat")
         btn_new.setCursor(Qt.PointingHandCursor)
         btn_new.setStyleSheet(
-            f"background-color: #D97706; color: #fff; border: none; border-radius: 10px;"
+            f"background-color: {pal.VERT}; color: #fff; border: none; border-radius: 10px;"
             f"padding: 10px 14px; font-size: 14px; font-weight: 600; font-family: '{ff}';"
         )
         btn_new.clicked.connect(self._reset_chat)

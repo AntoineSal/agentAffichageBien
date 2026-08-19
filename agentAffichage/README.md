@@ -74,27 +74,56 @@ repli comme `"?"` ou `"Lieu inconnu"`. `rendu/registre.py` factorise ce principe
 dans deux utilitaires partagés, `_fragment()` et `_joindre_fragments()`, pensés
 pour être réutilisés par les prochains widgets plutôt que réécrits à chaque fois.
 
+### Palette de couleurs
+
+`rendu/palette.py` est la seule source de couleurs : les 8 fonctions de rendu,
+la CSS de page (`afficheur.py`) et l'UI PySide6 du sandbox (`sandbox/app.py`)
+l'importent toutes les trois — jamais de couleur écrite en dur ailleurs.
+
+Couleur de marque EchoSocial (fournie par l'utilisateur) :
+`ECHO_COLOR = dynamicColor("rgba(10, 145, 104, 0.8)", "rgba(22, 185, 134, 0.85)")`
+— le sandbox n'ayant qu'un thème clair, `VERT` reprend la variante claire telle
+quelle (`#0A9168`), `VERT_VIF` réutilise la variante sombre comme accent (`#16B986`).
+
+| Constante | Rôle |
+|---|---|
+| `VERT` / `VERT_FONCE` / `VERT_PRESSE` / `VERT_CLAIR` / `VERT_VIF` | couleur de marque et ses variations |
+| `AMBRE`, `BLEU`, `PRUNE`, `CORAIL` | complémentaires, calculées à luminosité/saturation proches du vert |
+| `SERIE_GRAPHIQUE` | rotation des 6 couleurs ci-dessus pour les graphiques multi-séries et les camemberts |
+| `TEXTE`, `TEXTE_MUTED`, `TEXTE_FAINT`, `SURFACE`, `FOND_DOUX`, `BORDURE` | neutres, repris tels quels (déjà neutres, s'accordent avec le vert) |
+
+**Bug corrigé (18/08/2026)** : les camemberts affichaient toutes leurs parts
+dans la même couleur. Cause : Chart.js attend un *tableau* de couleurs
+(`backgroundColor`) pour un graphique en secteurs — une part par valeur — alors
+que le code appliquait une seule couleur par *série* (correct pour barres/lignes,
+mais un camembert n'a qu'une série). `graphique()` traite maintenant les
+graphiques `secteurs` différemment : `_couleur_serie(i)` par valeur, pas par série.
+
 ## Structure des fichiers
 
 ```
 agentAffichageBien/
-├── verifier_selection.py       vérification manuelle avec un vrai appel Mistral (clé requise)
+├── verifier_selection.py         vérification manuelle avec un vrai appel Mistral (clé requise)
+├── exemples_test_sandbox.txt     réponses simulées à coller en mode "Texte brut (Sélection + Rendu)"
 ├── tests/
-│   ├── test_selection_phase1.py   catalogue (8 widgets) → prompt → schémas, sans appel API
-│   ├── test_selecteur_phase2.py    selecteur.py avec un client Mistral simulé, sans appel API
-│   ├── test_pipeline_phase3.py      genererAffichage() : 0/1/plusieurs widgets, et repli sur échec
-│   └── test_registre_widgets.py      les 8 fonctions de rendu, cas remplis et cas vides
+│   ├── test_selection_phase1.py     catalogue (8 widgets) → prompt → schémas, sans appel API
+│   ├── test_selecteur_phase2.py      selecteur.py avec un client Mistral simulé, sans appel API
+│   ├── test_confiance.py              filtrage par seuil de confiance
+│   ├── test_pipeline_phase3.py         genererAffichage() : filtrage + rendu + repli sur échec
+│   └── test_registre_widgets.py         les 8 fonctions de rendu, palette, couleurs du camembert
 └── agentAffichage/
     ├── README.md              ce document
-    ├── pipeline.py             genererAffichage() : sélection puis rendu, avec repli
+    ├── pipeline.py             genererAffichage() : sélection, filtrage, rendu, avec repli
     ├── rendu/
-    │   ├── afficheur.py         afficherJoliment() : Markdown + blocs widget(s) → HTML
-    │   └── registre.py           composants HTML purs (un par widget)
+    │   ├── palette.py            couleurs partagées (widgets + UI du sandbox), source unique
+    │   ├── afficheur.py           afficherJoliment() : Markdown + blocs widget(s) → HTML
+    │   └── registre.py             composants HTML purs (un par widget)
     └── selection/
-        ├── schemas.py            modèles Pydantic (union discriminée sur "type", liste de widgets)
+        ├── schemas.py            modèles Pydantic (union discriminée, candidats + confidence)
         ├── catalogue.py           liste déclarative des 8 widgets connus (objectif/quand/quand pas)
-        ├── prompt.py               génère le prompt de sélection depuis le catalogue
-        └── selecteur.py            selectionner_widget() : appel Mistral (SDK mistralai)
+        ├── prompt.py               génère le prompt (widgets + score de confiance) depuis le catalogue
+        ├── confiance.py             SEUIL_AFFICHAGE + filtrage déterministe des candidats
+        └── selecteur.py             selectionner_widget() : appel Mistral (SDK mistralai)
 ```
 
 ## Philosophie
@@ -119,6 +148,27 @@ Le texte complet du prompt (avec les 12 étapes de la démarche de décision) es
 généré par `selection/prompt.py::construire_prompt_selection()` — à lire
 directement plutôt que dupliqué ici, pour ne jamais diverger de ce que Mistral
 reçoit réellement.
+
+### Score de confiance
+
+Depuis le 18/08/2026, chaque widget candidat porte son propre `confidence`
+(0 à 1) et sa `raison`, calculés par Mistral selon 5 dimensions pondérées :
+pertinence (25%), complétude (20%), **valeur ajoutée (35%, la plus
+importante)**, clarté (10%), redondance (10%). Le modèle **n'applique lui-même
+aucun seuil** : `ResultatSelection.candidats` contient tous les candidats
+évalués, même ceux jugés faibles — c'est `selection/confiance.py::widgets_retenus()`
+qui filtre ensuite, de façon déterministe, avec `SEUIL_AFFICHAGE = 0.75` (bande
+"bonne pertinence" de la spec fournie par l'utilisateur, volontairement élevée :
+on préfère un widget manqué à un widget inutile affiché).
+
+Garder ce seuil dans du code Python plutôt que dans le prompt le rend ajustable
+sans re-toucher au prompt, et garder tous les candidats (pas seulement les
+retenus) rend les rejets inspectables — utile pour le futur outil de debug
+évoqué plus bas.
+
+Le bloc `` ```widget:type{json}``` `` (voir "Le contrat" ci-dessus) ne contient
+que `donnees` — `confidence`/`raison` ne sont jamais sérialisés dans le texte
+affiché, ils ne servent qu'en interne à la décision.
 
 ## Catalogue des widgets
 
@@ -147,6 +197,24 @@ entrée de dispatch dans `afficheur.py` restent en place, inchangés — un bloc
 `` ```widget:weather{...}``` `` écrit à la main (mode "Agent (Rendu Direct)")
 continue de fonctionner. Rien n'est supprimé, juste plus proposé par la
 sélection en l'état actuel.
+
+### Widget `image` : pourquoi une URL peut ne rien afficher
+
+Deux causes possibles si une vraie URL de photo ne montre rien :
+1. **L'URL pointe vers une page web, pas vers le fichier image lui-même**
+   (ex : un lien Unsplash/Pinterest/Google Images vers la *page* de la photo,
+   pas vers son fichier `.jpg`/`.png`). Un `<img src="...">` a besoin du lien
+   direct vers le fichier. Depuis le 18/08/2026, ce cas affiche maintenant un
+   message "⚠️ Image indisponible" au lieu de rien du tout (`onerror` sur la
+   balise `<img>`, voir `registre.image()`).
+2. **Le texte de test contenait l'URL nue**, pas la syntaxe Markdown
+   `![description](url)`. Avec une URL nue, le Markdown ne rend pas l'image
+   nativement — elle reste visible en texte brut à côté du widget (voulu :
+   voir "La réponse Markdown d'origine reste la source de vérité" plus haut,
+   le texte doit rester compréhensible même si le widget échoue). Pour que
+   *seule* la photo apparaisse, sans lien texte visible, écrire le test avec
+   la syntaxe Markdown `![...](...)` : le Markdown natif l'affiche déjà comme
+   une image, indépendamment du widget.
 
 ## Les trois modes du sandbox
 
@@ -197,7 +265,11 @@ via `pipeline.py`, exactement comme `selectionner_widget()` seul).
 - [x] **Phase 1** — fondations de la sélection sans appel LLM : `schemas.py`, `catalogue.py`, `prompt.py`, testés par `tests/test_selection_phase1.py`
 - [x] **Phase 2** — `selecteur.py` écrit, testé (client Mistral simulé), et vérifié avec un vrai appel Mistral (`verifier_selection.py`, 17/08/2026)
 - [x] **Phase 3** — `pipeline.py::genererAffichage()` + branchement dans `sandbox/app.py`, fallback testé. Trois modes dans le sandbox (voir "Les trois modes du sandbox" ci-dessus) ; "Agent (Rendu Direct)" continue d'appeler `afficherJoliment()` directement
-- [x] **Refonte (18/08/2026)** — catalogue remplacé par les 8 widgets génériques (IMAGE/TABLE/CODE/FILE/CARD/CHART/STATS/TIMELINE) sur spec détaillée de l'utilisateur, remplace l'approche par domaine (weather/lien/photo/calendrier/carte) prévue en phase 4. Sélection multi-widgets (0 à 3 par réponse). `weather` retiré du catalogue actif, code de rendu conservé. 42/42 tests passent (schémas, catalogue, prompt, sélecteur simulé, pipeline, 8 fonctions de rendu). **Pas encore vérifié avec un vrai appel Mistral** — l'union discriminée dans une liste est un terrain nouveau pour les Custom Structured Outputs, à tester en conditions réelles (`verifier_selection.py`, exemples mis à jour) avant de considérer la sélection multi-widgets fiable.
+- [x] **Refonte (18/08/2026)** — catalogue remplacé par les 8 widgets génériques (IMAGE/TABLE/CODE/FILE/CARD/CHART/STATS/TIMELINE) sur spec détaillée de l'utilisateur, remplace l'approche par domaine (weather/lien/photo/calendrier/carte) prévue en phase 4. Sélection multi-widgets (0 à 3 par réponse). `weather` retiré du catalogue actif, code de rendu conservé.
+- [x] **Score de confiance (18/08/2026)** — chaque candidat porte confidence + raison (5 dimensions pondérées), filtrage déterministe par seuil (`selection/confiance.py`, `SEUIL_AFFICHAGE = 0.75`). Le modèle ne filtre plus lui-même.
+- [x] **Palette + corrections visuelles (18/08/2026)** — `rendu/palette.py` (vert de marque EchoSocial + complémentaires), appliquée aux 8 widgets, à la CSS de page et à l'UI du sandbox. Bug des camemberts monochromes corrigé. Widget `image` : repli visible si l'URL est cassée.
+- [x] **56/56 tests passent** (schémas, catalogue, prompt, confiance, sélecteur simulé, pipeline, rendu). **Toujours pas vérifié avec un vrai appel Mistral** — candidats à confidence + union discriminée dans une liste est un terrain encore plus nouveau pour les Custom Structured Outputs qu'avant ; à tester en conditions réelles avant de considérer le mécanisme fiable.
+- [ ] **Demandé, pas encore fait** — une "console" dans le sandbox montrant, pour chaque message passé par la sélection, tous les candidats évalués et leur confidence (utile pour ajuster le prompt à la main). Discuté en réponse, pas implémenté.
 - [ ] **Phase 5** — robustesse (grille de test manuelle) sur le nouveau catalogue
 - [ ] **Phase 6** — bilan avec Antoine
 

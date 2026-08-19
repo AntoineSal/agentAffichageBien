@@ -1,10 +1,144 @@
-Plusieurs problèmes à régler :
-- Pour certains graphiques, et pourle camembert en particulier, toutes les parts sont exactement de la même couleur, ce qui fait ... un rond. Il faut changer les couleurs.
-- J'aimerais que tu me crée une palette de couleurs qui puisse être utilisée pour tous les widgets. £Change également la couleur primaire de la sandbox.
-La couleur PRINCIPALE : ECHO_COLOR = dynamicColor("rgba(10, 145, 104, 0.8)", "rgba(22, 185, 134, 0.85)"); c'est ue sorte de vert.
-J'aimerais que dans cette palette tu inclues des variations de ce vert, plus foncées, plkus claires, des couleurs différentes quicomplètent bien, et que tu les utilises dans les widgets à bon escient.
-- j'ai remplacé le lien fictif de photo avec un vrai lien de photo, mais rien de s'affiche sur la sandbox. Aussi, pour les lien des photos en particulier, j'aimerais que le lien n'apparaisse plus en texte, et qu'il n'y ait que la photo.
+════════════════════════════════════════════════════════════════════
+  RÉPONSES SIMULÉES — À COLLER EN MODE "Texte brut (Sélection + Rendu)"
+════════════════════════════════════════════════════════════════════
 
+⚠️ IMPORTANT : le champ de saisie de la sandbox est une ligne UNIQUE
+(QLineEdit) — il ne supporte pas le retour à la ligne. Toutes les
+réponses ci-dessous tiennent donc sur une seule ligne. Exception : le
+widget CODE a besoin d'un vrai bloc multi-lignes, impossible à coller
+proprement ici — utilisez plutôt verifier_selection.py pour ce cas
+(un exemple Python y est déjà prêt).
 
-À ne pas implémenter tout de suite, mais juste dis mois dans le chat :
-j'aimerais mettre dans la sandbox une sorte de "console", où pour chaque conversation, pour chaque message qui passe par la pipeline de selection (que ce soit via l'API Mistral ou par une entrée utilisateur selection+rendu), je voie exactement ce que le LLM a décidé.
+Chaque réponse est précédée d'une ligne « › ... » qui indique ce qui
+est attendu — NE COLLEZ PAS cette ligne, seulement la phrase qui suit.
+
+──────────────────────────────────────────
+IMAGE
+──────────────────────────────────────────
+
+› positif — URL Markdown
+Voici un aperçu du logo de l'entreprise : ![Logo](https://exemple.com/logo.png)
+
+› positif — URL directe dans le texte
+J'ai trouvé cette photo du produit : https://exemple.com/produit.jpg
+
+› négatif — image mentionnée sans URL utilisable
+Voici une photo de la tour Eiffel de nuit, magnifique à cette heure.
+
+──────────────────────────────────────────
+TABLE
+──────────────────────────────────────────
+
+› positif — comparaison à 4 options et plusieurs critères
+Voici nos forfaits : Basique à 9,99€ avec 10 Go et support email, Standard à 19,99€ avec 50 Go et support chat, Premium à 39,99€ avec 200 Go et support téléphonique prioritaire, Entreprise à 99,99€ avec stockage illimité et support dédié 24/7.
+
+› positif — données par région, plusieurs colonnes
+Résultats du trimestre par région : Nord 120K€ avec 15% de croissance, Sud 95K€ avec 8% de croissance, Est 140K€ avec 22% de croissance, Ouest 88K€ avec 5% de croissance, Centre 110K€ avec 12% de croissance.
+
+› négatif — seulement 2 options, le Markdown suffit
+Il y a deux options : le forfait Basique à 9,99€ et le forfait Premium à 39,99€.
+
+──────────────────────────────────────────
+CODE
+──────────────────────────────────────────
+
+› négatif — fragment de code inline, pas un vrai bloc
+Utilise la fonction len() pour connaître la taille d'une liste en Python.
+
+  (Le cas positif — un vrai bloc de code multi-lignes — ne peut pas être
+   collé dans ce champ à une seule ligne. Testez-le avec :
+   .venv/bin/python3 verifier_selection.py)
+
+──────────────────────────────────────────
+FILE
+──────────────────────────────────────────
+
+› positif — lien Markdown vers un PDF
+Voici le guide complet : [Télécharger le guide](https://exemple.com/guide.pdf)
+
+› positif — URL directe vers un fichier
+Le contrat est disponible ici : https://exemple.com/contrat.docx
+
+› négatif — fichier évoqué sans lien utilisable
+Je peux te préparer un fichier PDF avec toutes les infos si tu veux.
+
+› négatif — juste une caractéristique du document
+Le rapport annuel fait 120 pages et couvre tous les aspects financiers.
+
+──────────────────────────────────────────
+CARD
+──────────────────────────────────────────
+
+› positif — entreprise avec plusieurs attributs
+Tesla, Inc. a été fondée en 2003 par Martin Eberhard et Marc Tarpenning. Son siège social est à Austin, au Texas. Elon Musk en est le PDG depuis 2008.
+
+› positif — livre avec plusieurs attributs
+Le livre "1984" a été écrit par George Orwell, publié en 1949, et compte 328 pages dans son édition originale.
+
+› négatif — une seule information
+Paris est la capitale de la France.
+
+› négatif — une seule information sur une personne
+George Orwell était un écrivain britannique.
+
+──────────────────────────────────────────
+CHART
+──────────────────────────────────────────
+
+› positif — série temporelle
+Les ventes ont évolué ainsi sur l'année : 12K en janvier, 15K en février, 11K en mars, 18K en avril, 22K en mai, 25K en juin.
+
+› positif — répartition par catégorie
+Répartition du trafic par source : Recherche organique 45%, Réseaux sociaux 25%, Email 15%, Publicité payante 10%, Direct 5%.
+
+› négatif — une seule valeur
+Le trafic a augmenté de 20% ce mois-ci.
+
+──────────────────────────────────────────
+STATS
+──────────────────────────────────────────
+
+› positif — plusieurs KPI ensemble
+Résultats du mois : 1 240 nouveaux utilisateurs, un taux de conversion de 3,2%, un panier moyen de 45€, et un taux de satisfaction de 4,6/5.
+
+› positif — statistiques sportives
+Bilan du match : 3 buts marqués, 68% de possession, 12 tirs cadrés, et 2 cartons jaunes.
+
+› négatif — une seule valeur, déjà claire
+On a eu 1 240 nouveaux utilisateurs ce mois-ci, c'est plutôt bien.
+
+──────────────────────────────────────────
+TIMELINE
+──────────────────────────────────────────
+
+› positif — historique d'entreprise
+Petit historique de Netflix : fondée en 1997 comme service de location de DVD par courrier, lancement du streaming en 2007, première série originale "House of Cards" en 2013, dépassement des 200 millions d'abonnés en 2021.
+
+› positif — jalons de projet
+Les grandes étapes du projet : phase de recherche terminée en mars 2025, prototype validé en juin 2025, tests utilisateurs en septembre 2025, lancement officiel prévu en janvier 2026.
+
+› négatif — une seule date
+Le projet a été lancé en janvier 2026.
+
+──────────────────────────────────────────
+PLUSIEURS WIDGETS À LA FOIS (cas rare, à surveiller de près)
+──────────────────────────────────────────
+
+› attendu : CARD (l'entreprise) + TIMELINE (les étapes)
+SpaceX a été fondée en 2002 par Elon Musk, avec son siège à Hawthorne en Californie. Voici les grandes étapes : premier vol réussi de Falcon 1 en 2008, premier arrimage à l'ISS en 2012, premier atterrissage de booster réussi en 2015, premier vol habité en 2020.
+
+› attendu : STATS (les 3 indicateurs) + CHART (l'évolution trimestrielle)
+Résultats trimestriels : chiffre d'affaires 85M€ (+15%), bénéfice net 12M€ (+8%), effectifs 450 (+20). Répartition par trimestre : T1 18M€, T2 20M€, T3 22M€, T4 25M€.
+
+──────────────────────────────────────────
+CONTRÔLES NÉGATIFS DIVERS (rien ne devrait s'afficher)
+──────────────────────────────────────────
+
+› conversation neutre
+Bonjour ! Comment puis-je vous aider aujourd'hui ?
+
+› explication générale, pas de données à représenter
+Le machine learning est un sous-domaine de l'intelligence artificielle qui permet aux systèmes d'apprendre à partir de données.
+
+› accusé de réception simple
+Merci pour votre message, je reviens vers vous rapidement.

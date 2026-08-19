@@ -12,6 +12,7 @@ import re
 
 import markdown as md
 
+from . import palette as pal
 from . import registre
 
 _MD_EXTENSIONS = ["extra", "sane_lists", "nl2br"]
@@ -174,7 +175,7 @@ def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
     font-size: 13px;
     font-variant: small-caps;
     letter-spacing: 0.05em;
-    color: #B45309;
+    color: {pal.VERT_FONCE};
     margin: 20px 0 8px;
   }}
   .content h3 {{
@@ -193,15 +194,15 @@ def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
 
   .content ul, .content ol {{ margin: 8px 0 10px; padding-left: 22px; }}
   .content li {{ margin: 4px 0; }}
-  .content ul li::marker {{ color: #D97706; }}
-  .content ol li::marker {{ color: #D97706; font-weight: 600; }}
+  .content ul li::marker {{ color: {pal.VERT}; }}
+  .content ol li::marker {{ color: {pal.VERT}; font-weight: 600; }}
 
   .content blockquote {{
     margin: 10px 0;
     padding: 4px 14px;
-    border-left: 3px solid #D97706;
-    background: #FBF7F2;
-    color: #57534E;
+    border-left: 3px solid {pal.VERT};
+    background: {pal.FOND_DOUX};
+    color: {pal.TEXTE_MUTED};
     font-style: italic;
     border-radius: 0 8px 8px 0;
   }}
@@ -230,8 +231,8 @@ def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
     color: #44403C;
   }}
 
-  .content a {{ color: #D97706; text-decoration: none; border-bottom: 1px solid #F0D9B5; }}
-  .content a:hover {{ color: #B45309; border-bottom-color: #D97706; }}
+  .content a {{ color: {pal.VERT}; text-decoration: none; border-bottom: 1px solid {pal.VERT_CLAIR}; }}
+  .content a:hover {{ color: {pal.VERT_FONCE}; border-bottom-color: {pal.VERT}; }}
 
   .content hr {{ border: none; border-top: 1px solid #E8E2DB; margin: 16px 0; }}
 
