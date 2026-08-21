@@ -163,12 +163,33 @@ on préfère un widget manqué à un widget inutile affiché).
 
 Garder ce seuil dans du code Python plutôt que dans le prompt le rend ajustable
 sans re-toucher au prompt, et garder tous les candidats (pas seulement les
-retenus) rend les rejets inspectables — utile pour le futur outil de debug
-évoqué plus bas.
+retenus) rend les rejets inspectables — c'est exactement ce que la console de
+sélection (ci-dessous) expose.
 
 Le bloc `` ```widget:type{json}``` `` (voir "Le contrat" ci-dessus) ne contient
 que `donnees` — `confidence`/`raison` ne sont jamais sérialisés dans le texte
 affiché, ils ne servent qu'en interne à la décision.
+
+### Console de sélection
+
+`genererAffichage()` renvoie un `ResultatAffichage` (`html`, `resultat_selection`,
+`erreur`) au lieu d'un simple `str` — `resultat_selection` porte la liste
+complète des candidats évalués (retenus ou non), `erreur` le message si l'appel
+de sélection a échoué. `pipeline.py::_construire_console()` transforme ça en un
+petit panneau repliable, injecté directement dans la page via le nouveau
+paramètre `extra_html` de `afficherJoliment()` (celui-ci n'a pas besoin de
+savoir ce que contient ce fragment, juste où l'insérer).
+
+Résultat dans le sandbox : sous chaque message passé par la sélection (modes
+"Utilisateur" et "Texte brut (Sélection + Rendu)" uniquement — "Agent (Rendu
+Direct)" ne fait jamais tourner la sélection), un "▸ Console de sélection"
+repliable liste chaque candidat avec son pourcentage de confiance, une barre
+colorée (vert = retenu, gris = rejeté) et sa raison. En cas d'échec de la
+sélection, le message d'erreur y apparaît directement.
+
+Objectif explicite de l'utilisateur : pouvoir coller une phrase de test, voir
+immédiatement pourquoi un widget a été affiché ou non, et ajuster `prompt.py`
+en conséquence sans deviner.
 
 ## Catalogue des widgets
 
@@ -198,23 +219,24 @@ entrée de dispatch dans `afficheur.py` restent en place, inchangés — un bloc
 continue de fonctionner. Rien n'est supprimé, juste plus proposé par la
 sélection en l'état actuel.
 
-### Widget `image` : pourquoi une URL peut ne rien afficher
+### Widget `image` : une seule exception à "le texte reste compréhensible seul"
 
-Deux causes possibles si une vraie URL de photo ne montre rien :
-1. **L'URL pointe vers une page web, pas vers le fichier image lui-même**
-   (ex : un lien Unsplash/Pinterest/Google Images vers la *page* de la photo,
-   pas vers son fichier `.jpg`/`.png`). Un `<img src="...">` a besoin du lien
-   direct vers le fichier. Depuis le 18/08/2026, ce cas affiche maintenant un
-   message "⚠️ Image indisponible" au lieu de rien du tout (`onerror` sur la
-   balise `<img>`, voir `registre.image()`).
-2. **Le texte de test contenait l'URL nue**, pas la syntaxe Markdown
-   `![description](url)`. Avec une URL nue, le Markdown ne rend pas l'image
-   nativement — elle reste visible en texte brut à côté du widget (voulu :
-   voir "La réponse Markdown d'origine reste la source de vérité" plus haut,
-   le texte doit rester compréhensible même si le widget échoue). Pour que
-   *seule* la photo apparaisse, sans lien texte visible, écrire le test avec
-   la syntaxe Markdown `![...](...)` : le Markdown natif l'affiche déjà comme
-   une image, indépendamment du widget.
+Une URL cassée (pointant vers une page web plutôt que vers le fichier image
+lui-même) affiche désormais "⚠️ Image indisponible" plutôt que rien du tout
+(`onerror` sur la balise `<img>`, voir `registre.image()`).
+
+Autre correctif (18/08/2026) : une photo retenue par la sélection s'affichait
+deux fois — une fois en Markdown natif (coins droits) si le texte utilisait la
+syntaxe `![alt](url)`, ou en URL nue visible en texte, et une seconde fois dans
+le widget (coins arrondis). `pipeline.py::_retirer_reference_image()` retire
+maintenant cette référence brute (syntaxe Markdown ou URL nue) du texte source
+quand — et seulement quand — le widget `image` correspondant est retenu.
+
+C'est une **exception volontaire et isolée**, propre à `image` : les 7 autres
+widgets ne touchent jamais au texte source (voir "Le contrat" plus haut — le
+Markdown doit rester compréhensible sans les widgets). Une photo est le seul
+cas où le contenu dupliqué est strictement identique visuellement (l'image
+elle-même), donc où le retrait ne perd aucune information.
 
 ## Les trois modes du sandbox
 
@@ -268,8 +290,8 @@ via `pipeline.py`, exactement comme `selectionner_widget()` seul).
 - [x] **Refonte (18/08/2026)** — catalogue remplacé par les 8 widgets génériques (IMAGE/TABLE/CODE/FILE/CARD/CHART/STATS/TIMELINE) sur spec détaillée de l'utilisateur, remplace l'approche par domaine (weather/lien/photo/calendrier/carte) prévue en phase 4. Sélection multi-widgets (0 à 3 par réponse). `weather` retiré du catalogue actif, code de rendu conservé.
 - [x] **Score de confiance (18/08/2026)** — chaque candidat porte confidence + raison (5 dimensions pondérées), filtrage déterministe par seuil (`selection/confiance.py`, `SEUIL_AFFICHAGE = 0.75`). Le modèle ne filtre plus lui-même.
 - [x] **Palette + corrections visuelles (18/08/2026)** — `rendu/palette.py` (vert de marque EchoSocial + complémentaires), appliquée aux 8 widgets, à la CSS de page et à l'UI du sandbox. Bug des camemberts monochromes corrigé. Widget `image` : repli visible si l'URL est cassée.
-- [x] **56/56 tests passent** (schémas, catalogue, prompt, confiance, sélecteur simulé, pipeline, rendu). **Toujours pas vérifié avec un vrai appel Mistral** — candidats à confidence + union discriminée dans une liste est un terrain encore plus nouveau pour les Custom Structured Outputs qu'avant ; à tester en conditions réelles avant de considérer le mécanisme fiable.
-- [ ] **Demandé, pas encore fait** — une "console" dans le sandbox montrant, pour chaque message passé par la sélection, tous les candidats évalués et leur confidence (utile pour ajuster le prompt à la main). Discuté en réponse, pas implémenté.
+- [x] **Console de sélection + correctif photo (18/08/2026)** — `genererAffichage()` renvoie maintenant `ResultatAffichage` (`html`, `resultat_selection`, `erreur`) ; panneau "Console de sélection" injecté dans chaque message (modes Utilisateur / Texte brut), listant tous les candidats avec confidence, statut et raison. Widget `image` : la référence brute (Markdown ou URL nue) est retirée du texte source quand le widget est retenu, exception isolée à ce seul widget — corrige l'affichage en double de la photo.
+- [x] **63/63 tests passent** (schémas, catalogue, prompt, confiance, sélecteur simulé, pipeline, console, retrait image, rendu). **Toujours pas vérifié avec un vrai appel Mistral** — candidats à confidence + union discriminée dans une liste est un terrain encore plus nouveau pour les Custom Structured Outputs qu'avant ; à tester en conditions réelles avant de considérer le mécanisme fiable.
 - [ ] **Phase 5** — robustesse (grille de test manuelle) sur le nouveau catalogue
 - [ ] **Phase 6** — bilan avec Antoine
 

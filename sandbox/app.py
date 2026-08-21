@@ -422,7 +422,7 @@ class MainWindow(QMainWindow):
             # (conversation puis sélection de widget), pas juste le premier.
             QApplication.setOverrideCursor(Qt.WaitCursor)
             response = call_mistral_api(prompt, self.api_key)
-            html = genererAffichage(response, fichiers, api_key=self.api_key)
+            html = genererAffichage(response, fichiers, api_key=self.api_key).html
             QApplication.restoreOverrideCursor()
         elif self.mode == "SelectionRendu":
             # Ce que l'on tape EST le texte brut, comme si c'était déjà la
@@ -430,7 +430,7 @@ class MainWindow(QMainWindow):
             # pipeline (sélection + rendu), sans appel conversationnel.
             QApplication.setOverrideCursor(Qt.WaitCursor)
             response = prompt
-            html = genererAffichage(response, fichiers, api_key=self.api_key)
+            html = genererAffichage(response, fichiers, api_key=self.api_key).html
             QApplication.restoreOverrideCursor()
         else:
             # Mode "Agent (Rendu Direct)" : on garde un accès direct au rendu

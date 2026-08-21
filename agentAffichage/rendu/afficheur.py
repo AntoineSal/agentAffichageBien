@@ -102,11 +102,11 @@ def _injecter_widgets(html_rendu: str, widgets: Dict[str, str]) -> str:
     return html_rendu
 
 
-def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
+def afficherJoliment(texte: str, fichiers: Optional[List] = None, extra_html: str = "") -> str:
     """
     Transforme le texte et les fichiers en un affichage HTML/CSS/JS.
 
-    Le texte est interprété comme du Markdown (généré naturellement 
+    Le texte est interprété comme du Markdown (généré naturellement
     par Mistral dans ses réponses.
     Les blocs ```widget:<type> sont extraits avant le parsing Markdown et
     rendus séparément via le registre de composants (agentAffichage/rendu/registre.py).
@@ -114,6 +114,10 @@ def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
     Args:
         texte: Le texte à afficher (Markdown, avec blocs widget optionnels).
         fichiers: Liste de fichiers uploadés (avec .name et .getvalue()).
+        extra_html: Fragment HTML optionnel ajouté en bas de carte, après le
+            bloc "voir le texte source" (ex: la console de sélection construite
+            par pipeline.py). afficherJoliment n'a pas besoin de savoir ce que
+            ce fragment contient, seulement où l'insérer.
 
     Returns:
         Code HTML/CSS/JS autonome (sera rendu dans un moteur Chromium isolé).
@@ -253,6 +257,7 @@ def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
     <summary>Voir le texte source (Markdown)</summary>
     <pre><code>{escaped_source}</code></pre>
   </details>
+  {extra_html}
 </div>
 </body>
 </html>"""
