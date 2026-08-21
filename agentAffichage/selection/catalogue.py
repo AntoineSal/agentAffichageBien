@@ -1,5 +1,7 @@
 """
-Catalogue déclaratif des widgets connus par la sélection.
+Catalogue déclaratif des 8 widgets connus par la sélection — la liste fermée
+imposée par la spec (IMAGE, TABLE, CODE, FILE, CARD, CHART, STATS, TIMELINE).
+Ne pas ajouter de widget en dehors de cette liste sans demande explicite.
 
 Ajouter un widget ici (et son schéma dans schemas.py, sa fonction de rendu dans
 rendu/registre.py, son entrée de dispatch dans rendu/afficheur.py) suffit à
@@ -12,23 +14,138 @@ from typing import Type
 
 from pydantic import BaseModel
 
-from .schemas import DonneesWeather
+from .schemas import (
+    DonneesCard,
+    DonneesChart,
+    DonneesCode,
+    DonneesFichier,
+    DonneesImage,
+    DonneesStats,
+    DonneesTable,
+    DonneesTimeline,
+)
 
 
 @dataclass(frozen=True)
 class DescripteurWidget:
     cle: str
-    description: str
+    objectif: str
+    utiliser_quand: str
+    ne_pas_utiliser_quand: str
     schema: Type[BaseModel]
 
 
 CATALOGUE = [
     DescripteurWidget(
-        cle="weather",
-        description=(
-            "La réponse contient une prévision ou un relevé météo concret "
-            "(température, conditions, prévisions à venir) pour un lieu identifié."
+        cle="image",
+        objectif="Afficher une image déjà référencée dans le texte comme composant visuel dédié.",
+        utiliser_quand=(
+            'Une image Markdown (![description](url)) ou une URL d\'image directe est '
+            "explicitement présente dans le texte."
         ),
-        schema=DonneesWeather,
+        ne_pas_utiliser_quand=(
+            'Le texte mentionne une image sans fournir d\'URL utilisable (ex: "Voici une '
+            'photo de Paris." sans lien). N\'invente jamais d\'URL.'
+        ),
+        schema=DonneesImage,
+    ),
+    DescripteurWidget(
+        cle="table",
+        objectif="Afficher des données tabulaires sous forme de tableau interactif amélioré (tri, filtre, recherche, pagination, colonnes fixes).",
+        utiliser_quand=(
+            "Un tableau volumineux, avec beaucoup de lignes/colonnes, des valeurs numériques, "
+            "ou des données que l'utilisateur voudrait raisonnablement trier/filtrer/rechercher."
+        ),
+        ne_pas_utiliser_quand=(
+            "Un petit tableau Markdown (ex: 3 lignes, 2 colonnes) est déjà clair tel quel — "
+            "la présence d'un tableau Markdown ne déclenche PAS automatiquement ce widget. "
+            "Demande-toi : le tableau interactif offre-t-il un avantage significatif sur le "
+            "tableau Markdown existant ? Si non, n'affiche rien."
+        ),
+        schema=DonneesTable,
+    ),
+    DescripteurWidget(
+        cle="code",
+        objectif="Afficher du code source dans une visionneuse améliorée (coloration syntaxique, langage, numéros de ligne).",
+        utiliser_quand="Le texte contient un vrai bloc de code source, substantiel.",
+        ne_pas_utiliser_quand=(
+            "Un court fragment de code en ligne (inline) — le widget doit rester proportionnel "
+            "à la quantité et à l'importance du code."
+        ),
+        schema=DonneesCode,
+    ),
+    DescripteurWidget(
+        cle="file",
+        objectif="Afficher un fichier téléchargeable référencé par le texte (PDF, DOCX, XLSX, PPTX, CSV, ZIP, TXT...) comme composant dédié.",
+        utiliser_quand=(
+            'Une URL de fichier réellement utilisable est présente (ex: "[Télécharger le '
+            'rapport](https://exemple.com/rapport.pdf)").'
+        ),
+        ne_pas_utiliser_quand=(
+            'Le texte parle d\'un document sans lien utilisable (ex: "Le rapport annuel fait '
+            '120 pages."). N\'invente jamais de fichier.'
+        ),
+        schema=DonneesFichier,
+    ),
+    DescripteurWidget(
+        cle="card",
+        objectif="Présenter une entité clairement identifiable (personne, entreprise, produit, lieu, livre, film, organisation...) sous forme structurée et compacte.",
+        utiliser_quand=(
+            "Le texte décrit une entité avec PLUSIEURS attributs distincts "
+            '(ex: "Apple Inc. a été fondée en 1976. Son siège social est à Cupertino. Son PDG '
+            'est Tim Cook." → titre + 2-3 attributs).'
+        ),
+        ne_pas_utiliser_quand=(
+            'Une phrase triviale ne contenant qu\'une seule information (ex: "Paris est la '
+            'capitale de la France." ne justifie pas une card). N\'invente jamais un attribut '
+            "manquant — n'affiche que ce que le texte soutient."
+        ),
+        schema=DonneesCard,
+    ),
+    DescripteurWidget(
+        cle="chart",
+        objectif="Représenter visuellement une évolution temporelle, une comparaison entre plusieurs entités, ou une distribution, quand un graphique se comprend nettement mieux qu'une phrase.",
+        utiliser_quand=(
+            'Une série de valeurs comparables (temporelle ou catégorielle) est présente '
+            '(ex: "100 M€ en 2021, 150 M€ en 2022, 180 M€ en 2023, 210 M€ en 2024" → ligne ; '
+            '"Paris 2,1M, Marseille 0,9M, Lyon 0,5M" → barres). Choisis type_graphique parmi '
+            "ligne (évolution temporelle), barres (comparaison catégorielle), secteurs "
+            "(part du tout, seulement si vraiment pertinent), nuage_points (deux variables "
+            "numériques comparées)."
+        ),
+        ne_pas_utiliser_quand=(
+            'Un seul nombre isolé (ex: "La population de Paris est d\'environ 2,1 millions '
+            'd\'habitants." ne justifie PAS un graphique) ou un jeu de données trop petit pour '
+            "bénéficier d'une visualisation. N'invente jamais un point de donnée manquant."
+        ),
+        schema=DonneesChart,
+    ),
+    DescripteurWidget(
+        cle="stats",
+        objectif="Mettre en avant un petit nombre d'indicateurs numériques clés (KPI, mesures financières, scores, comptages...) de façon visuellement proéminente et facile à balayer du regard.",
+        utiliser_quand=(
+            'Un ensemble significatif de mesures clés est présent (ex: "Chiffre d\'affaires : '
+            '420 M€. Croissance : +12%. Marge : 24%. Employés : 4 200." → 4 indicateurs).'
+        ),
+        ne_pas_utiliser_quand=(
+            "Une valeur numérique unique et insignifiante, ou une phrase déjà simple et claire "
+            "que la card statistique ne ferait que dupliquer. N'invente jamais de valeur, "
+            "d'unité, de comparaison ou de tendance."
+        ),
+        schema=DonneesStats,
+    ),
+    DescripteurWidget(
+        cle="timeline",
+        objectif="Afficher plusieurs événements distincts organisés chronologiquement (histoire, biographie, jalons de projet, séquence de procédure...).",
+        utiliser_quand=(
+            'Le texte décrit une séquence d\'événements datés formant une progression '
+            'significative (ex: "1976 : fondation d\'Apple. 1984 : Macintosh. 2007 : iPhone." '
+            "→ 3 événements)."
+        ),
+        ne_pas_utiliser_quand=(
+            "Une seule date/événement, ou plusieurs dates qui ne forment pas une séquence "
+            "chronologique significative. N'invente jamais de date ou d'événement."
+        ),
+        schema=DonneesTimeline,
     ),
 ]

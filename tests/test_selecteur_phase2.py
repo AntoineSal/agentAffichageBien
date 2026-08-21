@@ -42,7 +42,7 @@ def test_leve_une_erreur_claire_si_locale_non_utf8(mock_mistral_cls, monkeypatch
 
 @patch("agentAffichage.selection.selecteur.Mistral")
 def test_renvoie_le_resultat_parse(mock_mistral_cls):
-    attendu = ResultatSelection(widget_type="aucun")
+    attendu = ResultatSelection()
     mock_client = MagicMock()
     mock_client.chat.parse.return_value = _reponse_simulee(attendu)
     mock_mistral_cls.return_value = mock_client
@@ -56,7 +56,7 @@ def test_renvoie_le_resultat_parse(mock_mistral_cls):
 @patch("agentAffichage.selection.selecteur.Mistral")
 def test_appelle_mistral_avec_le_bon_format_et_les_bons_messages(mock_mistral_cls):
     mock_client = MagicMock()
-    mock_client.chat.parse.return_value = _reponse_simulee(ResultatSelection(widget_type="aucun"))
+    mock_client.chat.parse.return_value = _reponse_simulee(ResultatSelection())
     mock_mistral_cls.return_value = mock_client
 
     selectionner_widget("Il fait 18°C à Paris.", api_key="cle-de-test")
@@ -64,7 +64,7 @@ def test_appelle_mistral_avec_le_bon_format_et_les_bons_messages(mock_mistral_cl
     _, kwargs = mock_client.chat.parse.call_args
     assert kwargs["response_format"] is ResultatSelection
     assert kwargs["messages"][0]["role"] == "system"
-    assert "weather" in kwargs["messages"][0]["content"]
+    assert '"stats"' in kwargs["messages"][0]["content"]
     assert kwargs["messages"][1] == {"role": "user", "content": "Il fait 18°C à Paris."}
 
 

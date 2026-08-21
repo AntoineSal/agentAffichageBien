@@ -12,6 +12,7 @@ import re
 
 import markdown as md
 
+from . import palette as pal
 from . import registre
 
 _MD_EXTENSIONS = ["extra", "sane_lists", "nl2br"]
@@ -26,6 +27,19 @@ _WIDGET_BLOCK_RE = re.compile(r"```widget:(\w+)\s*\n(.*?)\n```", re.DOTALL)
 # Dispatch type de widget -> fonction du registre. Chaque fonction reçoit le
 # JSON décodé du bloc et renvoie un fragment HTML autonome.
 _REGISTRE_WIDGETS = {
+    # Widgets génériques (catalogue actif de la sélection, voir
+    # agentAffichage/selection/catalogue.py) :
+    "image": registre.image,
+    "table": registre.tableau,
+    "code": registre.code,
+    "file": registre.fichier,
+    "card": registre.carte,
+    "chart": registre.graphique,
+    "stats": registre.statistiques,
+    "timeline": registre.chronologie,
+    # Composants de base et widget météo : plus proposés par la sélection
+    # actuelle, mais toujours utilisables à la main (mode "Agent (Rendu
+    # Direct)" du sandbox) — rien n'est supprimé côté rendu.
     "weather": registre.carte_meteo,
     "titre": lambda data: registre.titre(data.get("texte", ""), data.get("niveau", 2)),
     "paragraphe": lambda data: registre.paragraphe(data.get("texte", "")),
@@ -88,11 +102,11 @@ def _injecter_widgets(html_rendu: str, widgets: Dict[str, str]) -> str:
     return html_rendu
 
 
-def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
+def afficherJoliment(texte: str, fichiers: Optional[List] = None, extra_html: str = "") -> str:
     """
     Transforme le texte et les fichiers en un affichage HTML/CSS/JS.
 
-    Le texte est interprété comme du Markdown (généré naturellement 
+    Le texte est interprété comme du Markdown (généré naturellement
     par Mistral dans ses réponses.
     Les blocs ```widget:<type> sont extraits avant le parsing Markdown et
     rendus séparément via le registre de composants (agentAffichage/rendu/registre.py).
@@ -100,6 +114,10 @@ def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
     Args:
         texte: Le texte à afficher (Markdown, avec blocs widget optionnels).
         fichiers: Liste de fichiers uploadés (avec .name et .getvalue()).
+        extra_html: Fragment HTML optionnel ajouté en bas de carte, après le
+            bloc "voir le texte source" (ex: la console de sélection construite
+            par pipeline.py). afficherJoliment n'a pas besoin de savoir ce que
+            ce fragment contient, seulement où l'insérer.
 
     Returns:
         Code HTML/CSS/JS autonome (sera rendu dans un moteur Chromium isolé).
@@ -161,7 +179,7 @@ def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
     font-size: 13px;
     font-variant: small-caps;
     letter-spacing: 0.05em;
-    color: #B45309;
+    color: {pal.VERT_FONCE};
     margin: 20px 0 8px;
   }}
   .content h3 {{
@@ -180,15 +198,15 @@ def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
 
   .content ul, .content ol {{ margin: 8px 0 10px; padding-left: 22px; }}
   .content li {{ margin: 4px 0; }}
-  .content ul li::marker {{ color: #D97706; }}
-  .content ol li::marker {{ color: #D97706; font-weight: 600; }}
+  .content ul li::marker {{ color: {pal.VERT}; }}
+  .content ol li::marker {{ color: {pal.VERT}; font-weight: 600; }}
 
   .content blockquote {{
     margin: 10px 0;
     padding: 4px 14px;
-    border-left: 3px solid #D97706;
-    background: #FBF7F2;
-    color: #57534E;
+    border-left: 3px solid {pal.VERT};
+    background: {pal.FOND_DOUX};
+    color: {pal.TEXTE_MUTED};
     font-style: italic;
     border-radius: 0 8px 8px 0;
   }}
@@ -217,8 +235,8 @@ def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
     color: #44403C;
   }}
 
-  .content a {{ color: #D97706; text-decoration: none; border-bottom: 1px solid #F0D9B5; }}
-  .content a:hover {{ color: #B45309; border-bottom-color: #D97706; }}
+  .content a {{ color: {pal.VERT}; text-decoration: none; border-bottom: 1px solid {pal.VERT_CLAIR}; }}
+  .content a:hover {{ color: {pal.VERT_FONCE}; border-bottom-color: {pal.VERT}; }}
 
   .content hr {{ border: none; border-top: 1px solid #E8E2DB; margin: 16px 0; }}
 
@@ -239,6 +257,7 @@ def afficherJoliment(texte: str, fichiers: Optional[List] = None) -> str:
     <summary>Voir le texte source (Markdown)</summary>
     <pre><code>{escaped_source}</code></pre>
   </details>
+  {extra_html}
 </div>
 </body>
 </html>"""

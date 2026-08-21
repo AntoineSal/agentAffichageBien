@@ -6,9 +6,11 @@ lancer l'application de test, voir le [README à la racine](../README.md).
 ## Objectif
 
 Transformer la réponse brute de Mistral (Markdown naturel, sans connaissance des
-widgets) en un affichage HTML enrichi, quand un widget peut apporter quelque chose
-visuellement (météo, lien, photo...). Le module est découpé en deux étages
-indépendants, qui ne communiquent que par du texte.
+widgets) en un affichage HTML enrichi, quand un widget apporte une valeur
+substantiellement meilleure que le Markdown seul — jamais parce que le contenu
+correspond juste techniquement au format d'un widget (voir "Philosophie" plus
+bas). Le module est découpé en deux étages indépendants, qui ne communiquent
+que par du texte.
 
 ## Architecture en deux étages
 
@@ -16,12 +18,12 @@ indépendants, qui ne communiquent que par du texte.
 texte brut (Mistral)
         │
         ▼
-┌───────────────────┐   décide QUOI afficher : quel widget (ou aucun),
+┌───────────────────┐   décide QUOI afficher : 0, 1 ou plusieurs widgets,
 │     sélection      │   et extrait les données depuis le texte
 └───────────────────┘
         │
         ▼
-texte annoté (même texte + au plus un bloc ```widget:type{json}```)
+texte annoté (même texte + 0 à 3 blocs ```widget:type{json}```)
         │
         ▼
 ┌───────────────────┐   décide COMMENT l'afficher : Markdown → HTML,
@@ -48,18 +50,19 @@ appelle en mode *"Utilisateur (API Mistral)"*.
 ## Le contrat entre les deux étages
 
 La sélection ne retourne jamais de HTML ni d'objet Python, seulement le texte
-d'origine, avec au plus un bloc en plus, dans le format que `rendu/afficheur.py`
-sait déjà parser :
+d'origine, avec 0 à 3 blocs en plus (souvent 0), dans le format que
+`rendu/afficheur.py` sait déjà parser — et qui accepte nativement plusieurs
+blocs dans un même texte, sans rien y changer :
 
 ```
-Bien sûr ! Voici les prévisions pour Paris : il fait 18°C, pluie légère...
+Chiffre d'affaires : 420 M€. Croissance : +12%. Marge : 24%. Employés : 4 200.
 
-​```widget:weather
-{"location": "Paris", "current": {"temperature": "18°C", "condition": "Pluie légère"}, "forecast": [...]}
+​```widget:stats
+{"indicateurs": [{"label": "Chiffre d'affaires", "valeur": "420 M€", "tendance": "+12%"}, ...]}
 ​```
 ```
 
-Ce format est stable et ne change pas au fil des phases suivantes.
+Ce format est stable et ne change pas selon le catalogue de widgets actif.
 
 ### Convention : widgets extensibles, jamais de valeur de repli
 
@@ -71,38 +74,169 @@ repli comme `"?"` ou `"Lieu inconnu"`. `rendu/registre.py` factorise ce principe
 dans deux utilitaires partagés, `_fragment()` et `_joindre_fragments()`, pensés
 pour être réutilisés par les prochains widgets plutôt que réécrits à chaque fois.
 
+### Palette de couleurs
+
+`rendu/palette.py` est la seule source de couleurs : les 8 fonctions de rendu,
+la CSS de page (`afficheur.py`) et l'UI PySide6 du sandbox (`sandbox/app.py`)
+l'importent toutes les trois — jamais de couleur écrite en dur ailleurs.
+
+Couleur de marque EchoSocial (fournie par l'utilisateur) :
+`ECHO_COLOR = dynamicColor("rgba(10, 145, 104, 0.8)", "rgba(22, 185, 134, 0.85)")`
+— le sandbox n'ayant qu'un thème clair, `VERT` reprend la variante claire telle
+quelle (`#0A9168`), `VERT_VIF` réutilise la variante sombre comme accent (`#16B986`).
+
+| Constante | Rôle |
+|---|---|
+| `VERT` / `VERT_FONCE` / `VERT_PRESSE` / `VERT_CLAIR` / `VERT_VIF` | couleur de marque et ses variations |
+| `AMBRE`, `BLEU`, `PRUNE`, `CORAIL` | complémentaires, calculées à luminosité/saturation proches du vert |
+| `SERIE_GRAPHIQUE` | rotation des 6 couleurs ci-dessus pour les graphiques multi-séries et les camemberts |
+| `TEXTE`, `TEXTE_MUTED`, `TEXTE_FAINT`, `SURFACE`, `FOND_DOUX`, `BORDURE` | neutres, repris tels quels (déjà neutres, s'accordent avec le vert) |
+
+**Bug corrigé (18/08/2026)** : les camemberts affichaient toutes leurs parts
+dans la même couleur. Cause : Chart.js attend un *tableau* de couleurs
+(`backgroundColor`) pour un graphique en secteurs — une part par valeur — alors
+que le code appliquait une seule couleur par *série* (correct pour barres/lignes,
+mais un camembert n'a qu'une série). `graphique()` traite maintenant les
+graphiques `secteurs` différemment : `_couleur_serie(i)` par valeur, pas par série.
+
 ## Structure des fichiers
 
 ```
 agentAffichageBien/
-├── verifier_selection.py       vérification manuelle avec un vrai appel Mistral (clé requise)
+├── verifier_selection.py         vérification manuelle avec un vrai appel Mistral (clé requise)
+├── exemples_test_sandbox.txt     réponses simulées à coller en mode "Texte brut (Sélection + Rendu)"
 ├── tests/
-│   ├── test_selection_phase1.py   catalogue → prompt → schémas, sans appel API
-│   ├── test_selecteur_phase2.py    selecteur.py avec un client Mistral simulé, sans appel API
-│   └── test_pipeline_phase3.py      genererAffichage() : succès, "aucun", et repli sur échec
+│   ├── test_selection_phase1.py     catalogue (8 widgets) → prompt → schémas, sans appel API
+│   ├── test_selecteur_phase2.py      selecteur.py avec un client Mistral simulé, sans appel API
+│   ├── test_confiance.py              filtrage par seuil de confiance
+│   ├── test_pipeline_phase3.py         genererAffichage() : filtrage + rendu + repli sur échec
+│   └── test_registre_widgets.py         les 8 fonctions de rendu, palette, couleurs du camembert
 └── agentAffichage/
     ├── README.md              ce document
-    ├── pipeline.py             genererAffichage() : sélection puis rendu, avec repli
+    ├── pipeline.py             genererAffichage() : sélection, filtrage, rendu, avec repli
     ├── rendu/
-    │   ├── afficheur.py         afficherJoliment() : Markdown + blocs widget → HTML
-    │   └── registre.py           composants HTML purs (un par widget)
+    │   ├── palette.py            couleurs partagées (widgets + UI du sandbox), source unique
+    │   ├── afficheur.py           afficherJoliment() : Markdown + blocs widget(s) → HTML
+    │   └── registre.py             composants HTML purs (un par widget)
     └── selection/
-        ├── schemas.py            modèles Pydantic (ResultatSelection, DonneesWeather...)
-        ├── catalogue.py           liste déclarative des widgets connus
-        ├── prompt.py               génère le prompt de sélection depuis le catalogue
-        └── selecteur.py            selectionner_widget() : appel Mistral (SDK mistralai)
+        ├── schemas.py            modèles Pydantic (union discriminée, candidats + confidence)
+        ├── catalogue.py           liste déclarative des 8 widgets connus (objectif/quand/quand pas)
+        ├── prompt.py               génère le prompt (widgets + score de confiance) depuis le catalogue
+        ├── confiance.py             SEUIL_AFFICHAGE + filtrage déterministe des candidats
+        └── selecteur.py             selectionner_widget() : appel Mistral (SDK mistralai)
 ```
+
+## Philosophie
+
+Contrainte de départ : l'agent conversationnel qui produit le Markdown **n'est
+jamais modifié** et ignore l'existence des widgets — la sélection ne dispose
+que du texte Markdown déjà écrit comme entrée. Elle ne doit jamais inventer une
+information absente de ce texte.
+
+Règle centrale, plus importante que tout le reste : **un widget ne doit être
+créé que s'il apporte une valeur substantiellement meilleure que le Markdown**,
+jamais parce que le contenu correspond juste techniquement à un format de
+widget. Les faux positifs sont pires que les faux négatifs — une réponse sans
+aucun widget est souvent le bon résultat.
+
+Exemple qui résume tout : *"La température extérieure est de 15°C."* ne doit
+**pas** générer de widget (la phrase suffit). *"Les températures seront de
+15°C lundi, 18°C mardi, 21°C mercredi et 17°C jeudi."* **peut** justifier un
+graphique (`chart`), parce que l'évolution devient nettement plus lisible.
+
+Le texte complet du prompt (avec les 12 étapes de la démarche de décision) est
+généré par `selection/prompt.py::construire_prompt_selection()` — à lire
+directement plutôt que dupliqué ici, pour ne jamais diverger de ce que Mistral
+reçoit réellement.
+
+### Score de confiance
+
+Depuis le 18/08/2026, chaque widget candidat porte son propre `confidence`
+(0 à 1) et sa `raison`, calculés par Mistral selon 5 dimensions pondérées :
+pertinence (25%), complétude (20%), **valeur ajoutée (35%, la plus
+importante)**, clarté (10%), redondance (10%). Le modèle **n'applique lui-même
+aucun seuil** : `ResultatSelection.candidats` contient tous les candidats
+évalués, même ceux jugés faibles — c'est `selection/confiance.py::widgets_retenus()`
+qui filtre ensuite, de façon déterministe, avec `SEUIL_AFFICHAGE = 0.75` (bande
+"bonne pertinence" de la spec fournie par l'utilisateur, volontairement élevée :
+on préfère un widget manqué à un widget inutile affiché).
+
+Garder ce seuil dans du code Python plutôt que dans le prompt le rend ajustable
+sans re-toucher au prompt, et garder tous les candidats (pas seulement les
+retenus) rend les rejets inspectables — c'est exactement ce que la console de
+sélection (ci-dessous) expose.
+
+Le bloc `` ```widget:type{json}``` `` (voir "Le contrat" ci-dessus) ne contient
+que `donnees` — `confidence`/`raison` ne sont jamais sérialisés dans le texte
+affiché, ils ne servent qu'en interne à la décision.
+
+### Console de sélection
+
+`genererAffichage()` renvoie un `ResultatAffichage` (`html`, `resultat_selection`,
+`erreur`) au lieu d'un simple `str` — `resultat_selection` porte la liste
+complète des candidats évalués (retenus ou non), `erreur` le message si l'appel
+de sélection a échoué. `pipeline.py::_construire_console()` transforme ça en un
+petit panneau repliable, injecté directement dans la page via le nouveau
+paramètre `extra_html` de `afficherJoliment()` (celui-ci n'a pas besoin de
+savoir ce que contient ce fragment, juste où l'insérer).
+
+Résultat dans le sandbox : sous chaque message passé par la sélection (modes
+"Utilisateur" et "Texte brut (Sélection + Rendu)" uniquement — "Agent (Rendu
+Direct)" ne fait jamais tourner la sélection), un "▸ Console de sélection"
+repliable liste chaque candidat avec son pourcentage de confiance, une barre
+colorée (vert = retenu, gris = rejeté) et sa raison. En cas d'échec de la
+sélection, le message d'erreur y apparaît directement.
+
+Objectif explicite de l'utilisateur : pouvoir coller une phrase de test, voir
+immédiatement pourquoi un widget a été affiché ou non, et ajuster `prompt.py`
+en conséquence sans deviner.
 
 ## Catalogue des widgets
 
-| Widget | Statut | Schéma | Rendu |
-|---|---|---|---|
-| `weather` | bout en bout, branché dans le sandbox (mode "Utilisateur (API Mistral)") | `selection/schemas.py::DonneesWeather` | `registre.carte_meteo()` |
-| `lien`, `photo`, `calendrier`, `carte` | ciblés pour la v1, ordre et contenu à préciser en phase 4 | à créer | à créer |
+Liste fermée à 8 widgets génériques (pas de widget spécifique à un domaine
+comme la météo ou le calendrier — n'importe quel domaine se représente via
+l'un de ces 8 types structurels) :
 
-`weather` est un widget pilote : c'est le seul déjà validé côté rendu, donc celui
-sur lequel le mécanisme de sélection a été prouvé en premier avant d'être
-dupliqué aux autres (phase 4).
+| Widget | Rôle | Déclencheur typique |
+|---|---|---|
+| `image` | image déjà référencée par une URL utilisable | image Markdown ou URL directe |
+| `table` | tableau interactif (tri/filtre/recherche) | tableau volumineux, pas un petit tableau Markdown |
+| `code` | visionneuse de code (coloration syntaxique) | un vrai bloc de code, pas un fragment inline |
+| `file` | fichier téléchargeable référencé | lien Markdown vers un PDF/DOCX/XLSX/CSV/ZIP... |
+| `card` | entité avec plusieurs attributs distincts | personne, entreprise, produit, lieu... décrits en détail |
+| `chart` | série temporelle ou comparaison entre entités | plusieurs valeurs comparables, pas un chiffre isolé |
+| `stats` | quelques indicateurs numériques clés | KPI, plusieurs mesures ensemble |
+| `timeline` | séquence chronologique d'événements distincts | plusieurs dates formant une progression |
+
+Détail complet (objectif, quand l'utiliser, quand surtout pas, exemples
+positifs/négatifs) dans `selection/catalogue.py`.
+
+**Note sur `weather`** : retiré du catalogue actif (il n'appartient pas à la
+liste fermée des 8 types) suite à un retour direct de l'utilisateur sur des
+problèmes non encore résolus avec ce widget. `registre.carte_meteo()` et son
+entrée de dispatch dans `afficheur.py` restent en place, inchangés — un bloc
+`` ```widget:weather{...}``` `` écrit à la main (mode "Agent (Rendu Direct)")
+continue de fonctionner. Rien n'est supprimé, juste plus proposé par la
+sélection en l'état actuel.
+
+### Widget `image` : une seule exception à "le texte reste compréhensible seul"
+
+Une URL cassée (pointant vers une page web plutôt que vers le fichier image
+lui-même) affiche désormais "⚠️ Image indisponible" plutôt que rien du tout
+(`onerror` sur la balise `<img>`, voir `registre.image()`).
+
+Autre correctif (18/08/2026) : une photo retenue par la sélection s'affichait
+deux fois — une fois en Markdown natif (coins droits) si le texte utilisait la
+syntaxe `![alt](url)`, ou en URL nue visible en texte, et une seconde fois dans
+le widget (coins arrondis). `pipeline.py::_retirer_reference_image()` retire
+maintenant cette référence brute (syntaxe Markdown ou URL nue) du texte source
+quand — et seulement quand — le widget `image` correspondant est retenu.
+
+C'est une **exception volontaire et isolée**, propre à `image` : les 7 autres
+widgets ne touchent jamais au texte source (voir "Le contrat" plus haut — le
+Markdown doit rester compréhensible sans les widgets). Une photo est le seul
+cas où le contenu dupliqué est strictement identique visuellement (l'image
+elle-même), donc où le retrait ne perd aucune information.
 
 ## Les trois modes du sandbox
 
@@ -153,7 +287,11 @@ via `pipeline.py`, exactement comme `selectionner_widget()` seul).
 - [x] **Phase 1** — fondations de la sélection sans appel LLM : `schemas.py`, `catalogue.py`, `prompt.py`, testés par `tests/test_selection_phase1.py`
 - [x] **Phase 2** — `selecteur.py` écrit, testé (client Mistral simulé), et vérifié avec un vrai appel Mistral (`verifier_selection.py`, 17/08/2026)
 - [x] **Phase 3** — `pipeline.py::genererAffichage()` + branchement dans `sandbox/app.py`, fallback testé. Trois modes dans le sandbox (voir "Les trois modes du sandbox" ci-dessus) ; "Agent (Rendu Direct)" continue d'appeler `afficherJoliment()` directement
-- [ ] **Phase 4** — extension aux widgets suivants
-- [ ] **Phase 5** — robustesse (grille de test manuelle)
+- [x] **Refonte (18/08/2026)** — catalogue remplacé par les 8 widgets génériques (IMAGE/TABLE/CODE/FILE/CARD/CHART/STATS/TIMELINE) sur spec détaillée de l'utilisateur, remplace l'approche par domaine (weather/lien/photo/calendrier/carte) prévue en phase 4. Sélection multi-widgets (0 à 3 par réponse). `weather` retiré du catalogue actif, code de rendu conservé.
+- [x] **Score de confiance (18/08/2026)** — chaque candidat porte confidence + raison (5 dimensions pondérées), filtrage déterministe par seuil (`selection/confiance.py`, `SEUIL_AFFICHAGE = 0.75`). Le modèle ne filtre plus lui-même.
+- [x] **Palette + corrections visuelles (18/08/2026)** — `rendu/palette.py` (vert de marque EchoSocial + complémentaires), appliquée aux 8 widgets, à la CSS de page et à l'UI du sandbox. Bug des camemberts monochromes corrigé. Widget `image` : repli visible si l'URL est cassée.
+- [x] **Console de sélection + correctif photo (18/08/2026)** — `genererAffichage()` renvoie maintenant `ResultatAffichage` (`html`, `resultat_selection`, `erreur`) ; panneau "Console de sélection" injecté dans chaque message (modes Utilisateur / Texte brut), listant tous les candidats avec confidence, statut et raison. Widget `image` : la référence brute (Markdown ou URL nue) est retirée du texte source quand le widget est retenu, exception isolée à ce seul widget — corrige l'affichage en double de la photo.
+- [x] **63/63 tests passent** (schémas, catalogue, prompt, confiance, sélecteur simulé, pipeline, console, retrait image, rendu). **Toujours pas vérifié avec un vrai appel Mistral** — candidats à confidence + union discriminée dans une liste est un terrain encore plus nouveau pour les Custom Structured Outputs qu'avant ; à tester en conditions réelles avant de considérer le mécanisme fiable.
+- [ ] **Phase 5** — robustesse (grille de test manuelle) sur le nouveau catalogue
 - [ ] **Phase 6** — bilan avec Antoine
 
