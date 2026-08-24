@@ -7,20 +7,27 @@ simulée partout ici — aucun appel réseau.
 
 from unittest.mock import patch
 
+from agentAffichage.metriques import Metriques
 from agentAffichage.pipeline import genererAffichage
 from agentAffichage.selection.confiance import SEUIL_AFFICHAGE
 from agentAffichage.selection.schemas import ResultatSelection
+from agentAffichage.selection.selecteur import AppelSelection
 
 
 def _candidat(type_, confidence, raison="test", **donnees):
     return {"type": type_, "confidence": confidence, "raison": raison, "donnees": donnees}
 
 
+def _appel(resultat, metriques=None):
+    """Reproduit la forme réelle de selectionner_widget() : (resultat, métriques)."""
+    return AppelSelection(resultat, metriques or Metriques())
+
+
 @patch("agentAffichage.pipeline.selectionner_widget")
 def test_candidat_au_dessus_du_seuil_est_rendu(mock_selectionner):
-    mock_selectionner.return_value = ResultatSelection(candidats=[
+    mock_selectionner.return_value = _appel(ResultatSelection(candidats=[
         _candidat("stats", SEUIL_AFFICHAGE + 0.1, indicateurs=[{"label": "CA", "valeur": "420 M€"}]),
-    ])
+    ]))
 
     resultat = genererAffichage("Le chiffre d'affaires est de 420 M€.")
 
@@ -29,9 +36,9 @@ def test_candidat_au_dessus_du_seuil_est_rendu(mock_selectionner):
 
 @patch("agentAffichage.pipeline.selectionner_widget")
 def test_candidat_sous_le_seuil_nest_pas_rendu(mock_selectionner):
-    mock_selectionner.return_value = ResultatSelection(candidats=[
+    mock_selectionner.return_value = _appel(ResultatSelection(candidats=[
         _candidat("stats", SEUIL_AFFICHAGE - 0.1, indicateurs=[{"label": "CA", "valeur": "420 M€"}]),
-    ])
+    ]))
 
     resultat = genererAffichage("Bonjour, comment vas-tu ?")
 
@@ -44,10 +51,10 @@ def test_candidat_sous_le_seuil_nest_pas_rendu(mock_selectionner):
 
 @patch("agentAffichage.pipeline.selectionner_widget")
 def test_seuls_les_candidats_retenus_sont_rendus_parmi_plusieurs(mock_selectionner):
-    mock_selectionner.return_value = ResultatSelection(candidats=[
+    mock_selectionner.return_value = _appel(ResultatSelection(candidats=[
         _candidat("card", 0.91, titre="Apple Inc.", attributs=[{"label": "PDG", "valeur": "Tim Cook"}]),
         _candidat("stats", 0.42, indicateurs=[{"label": "Fondation", "valeur": "1976"}]),
-    ])
+    ]))
 
     resultat = genererAffichage("Petit résumé d'Apple.")
 
@@ -57,7 +64,7 @@ def test_seuls_les_candidats_retenus_sont_rendus_parmi_plusieurs(mock_selectionn
 
 @patch("agentAffichage.pipeline.selectionner_widget")
 def test_aucun_candidat_rend_juste_le_texte(mock_selectionner):
-    mock_selectionner.return_value = ResultatSelection()
+    mock_selectionner.return_value = _appel(ResultatSelection())
 
     resultat = genererAffichage("Bonjour, comment vas-tu ?")
 
@@ -78,7 +85,7 @@ def test_echec_de_la_selection_retombe_sur_le_texte_brut(mock_selectionner, caps
 
 @patch("agentAffichage.pipeline.selectionner_widget")
 def test_cle_api_transmise_a_la_selection(mock_selectionner):
-    mock_selectionner.return_value = ResultatSelection()
+    mock_selectionner.return_value = _appel(ResultatSelection())
 
     genererAffichage("Texte quelconque.", api_key="cle-de-test")
 
@@ -95,7 +102,7 @@ def test_resultat_selection_expose_tous_les_candidats(mock_selectionner):
         _candidat("card", 0.91, titre="Apple Inc.", attributs=[]),
         _candidat("stats", 0.42, indicateurs=[]),
     ])
-    mock_selectionner.return_value = r
+    mock_selectionner.return_value = _appel(r)
 
     resultat = genererAffichage("Petit résumé d'Apple.")
 
@@ -116,10 +123,10 @@ def test_echec_expose_erreur_et_resultat_selection_none(mock_selectionner):
 
 @patch("agentAffichage.pipeline.selectionner_widget")
 def test_console_liste_les_candidats_retenus_et_rejetes(mock_selectionner):
-    mock_selectionner.return_value = ResultatSelection(candidats=[
+    mock_selectionner.return_value = _appel(ResultatSelection(candidats=[
         _candidat("card", 0.91, raison="entité avec plusieurs attributs", titre="Apple Inc.", attributs=[]),
         _candidat("stats", 0.42, raison="valeur isolée", indicateurs=[]),
-    ])
+    ]))
 
     resultat = genererAffichage("Petit résumé d'Apple.")
     console = resultat.html.split("Console de sélection")[1]
@@ -142,9 +149,9 @@ def test_console_signale_lechec_de_selection(mock_selectionner):
 @patch("agentAffichage.pipeline.selectionner_widget")
 def test_image_retenue_retire_la_syntaxe_markdown_du_texte_source(mock_selectionner):
     url = "https://exemple.com/chat.jpg"
-    mock_selectionner.return_value = ResultatSelection(candidats=[
+    mock_selectionner.return_value = _appel(ResultatSelection(candidats=[
         _candidat("image", 0.9, url=url, alt="Un chat"),
-    ])
+    ]))
 
     resultat = genererAffichage(f"Voici la photo : ![Un chat]({url})")
 
@@ -157,9 +164,9 @@ def test_image_retenue_retire_la_syntaxe_markdown_du_texte_source(mock_selection
 @patch("agentAffichage.pipeline.selectionner_widget")
 def test_image_retenue_retire_lurl_nue_du_texte_source(mock_selectionner):
     url = "https://exemple.com/chat.jpg"
-    mock_selectionner.return_value = ResultatSelection(candidats=[
+    mock_selectionner.return_value = _appel(ResultatSelection(candidats=[
         _candidat("image", 0.9, url=url),
-    ])
+    ]))
 
     resultat = genererAffichage(f"Voici la photo : {url}")
 
@@ -175,14 +182,39 @@ def test_image_retenue_retire_lurl_nue_du_texte_source(mock_selectionner):
 
 @patch("agentAffichage.pipeline.selectionner_widget")
 def test_autres_widgets_ne_retirent_rien_du_texte_source(mock_selectionner):
-    """L'exception est propre à image : un lien de fichier retenu doit rester
-    visible dans le texte en plus du widget (le texte doit rester compréhensible seul)."""
+    """L'exception est propre à image (et code) : un lien de fichier retenu
+    doit rester visible dans le texte en plus du widget (le texte doit rester
+    compréhensible seul)."""
     url = "https://exemple.com/rapport.pdf"
-    mock_selectionner.return_value = ResultatSelection(candidats=[
+    mock_selectionner.return_value = _appel(ResultatSelection(candidats=[
         _candidat("file", 0.9, url=url, nom="rapport.pdf"),
-    ])
+    ]))
 
     resultat = genererAffichage(f"Voici le rapport : [Télécharger]({url})")
 
     contenu_avant_details = resultat.html.split("<details>")[0]
     assert url in contenu_avant_details
+
+
+# ─── Métriques exposées dans la console ──────────────────────────────────────
+
+@patch("agentAffichage.pipeline.selectionner_widget")
+def test_la_console_affiche_le_temps_et_les_tokens(mock_selectionner):
+    mock_selectionner.return_value = _appel(
+        ResultatSelection(),
+        Metriques(temps_appel_ms=842.0, tokens_prompt=310, tokens_completion=90, tokens_total=400),
+    )
+
+    console = genererAffichage("Bonjour.").html.split("Console de sélection")[1]
+
+    assert "842" in console
+    assert "310+90=400 tokens" in console
+
+
+@patch("agentAffichage.pipeline.selectionner_widget")
+def test_la_console_signale_les_tokens_indisponibles(mock_selectionner):
+    mock_selectionner.return_value = _appel(ResultatSelection())  # Metriques() par défaut, tokens=None
+
+    console = genererAffichage("Bonjour.").html.split("Console de sélection")[1]
+
+    assert "tokens indisponibles" in console

@@ -11,10 +11,10 @@ from datetime import datetime
 from typing import List, Dict, Optional
 
 from PySide6.QtCore import Qt, Signal, Slot, QTimer
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QFontMetrics
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QScrollArea, QFrame, QLabel, QLineEdit, QPushButton,
+    QScrollArea, QFrame, QLabel, QLineEdit, QTextEdit, QPushButton,
     QRadioButton, QFileDialog, QListWidget, QListWidgetItem,
     QGraphicsDropShadowEffect, QSizePolicy
 )
@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 from .utils import call_mistral_api
 from agentAffichage.rendu.afficheur import afficherJoliment
 from agentAffichage.rendu import palette as pal
-from agentAffichage.pipeline import genererAffichage
+from agentAffichage.pipeline import genererAffichage, genererAffichageAvecOutils
 
 # QWebEngineView est importé de manière lazy pour éviter les crashs macOS
 _QWebEngineView = None
@@ -135,6 +135,89 @@ class AgentMessageWidget(QWidget):
             self.web_view.setFixedHeight(int(height) + 6)
 
 
+class ChampSaisieWidget(QTextEdit):
+    """
+    Champ de saisie multi-ligne pour la barre de prompt.
+
+    Un QLineEdit ne tient qu'une ligne : coller une question de test un peu
+    longue (les questions de bugs_new_architecture.txt tiennent parfois sur
+    plusieurs lignes) écrasait les retours à la ligne et rendait le texte
+    illisible pendant la frappe. D'où un QTextEdit, avec les conventions de
+    saisie habituelles d'une messagerie :
+
+      Entrée              → envoie le message
+      Maj+Entrée          → passe à la ligne
+      Ctrl/Cmd+Entrée     → envoie aussi (réflexe fréquent)
+
+    La hauteur suit le contenu, d'une ligne jusqu'à LIGNES_MAX, puis le champ
+    défile au lieu de continuer à pousser la conversation vers le haut.
+    """
+
+    soumis = Signal()
+
+    LIGNES_MAX = 8
+
+    def __init__(self, font_family: str, parent=None):
+        super().__init__(parent)
+        self.setFrameShape(QFrame.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Un copier-coller depuis une page web ou un traitement de texte ne doit
+        # pas amener sa mise en forme dans le champ : seul le texte est retenu.
+        self.setAcceptRichText(False)
+        self.setTabChangesFocus(True)
+        self.setPlaceholderText("Envoyer un message...    (Maj+Entrée pour aller à la ligne)")
+        self.setStyleSheet(
+            f"QTextEdit {{"
+            f"  background: transparent;"
+            f"  border: none;"
+            f"  font-size: 15px;"
+            f"  color: #1a1a1a;"
+            f"  font-family: '{font_family}';"
+            f"}}"
+        )
+        self.document().contentsChanged.connect(self._ajuster_hauteur)
+        self._ajuster_hauteur()
+
+    def _hauteur_bornes(self):
+        ligne = QFontMetrics(self.font()).lineSpacing()
+        marge = 2 * int(self.document().documentMargin())
+        return ligne + marge, ligne * self.LIGNES_MAX + marge
+
+    def _ajuster_hauteur(self):
+        # Le document ne connaît sa hauteur qu'une fois sa largeur fixée : tant
+        # que le champ n'a pas été affiché, Qt laisse textWidth à 0 et
+        # documentSize().height() vaut 0. La largeur du viewport lui est donc
+        # donnée explicitement, ce qui rend aussi la mesure correcte quand une
+        # ligne longue est repliée sur plusieurs lignes visuelles.
+        doc = self.document()
+        doc.setTextWidth(self.viewport().width())
+
+        mini, maxi = self._hauteur_bornes()
+        contenu = doc.size().height()
+        self.setFixedHeight(int(min(max(contenu, mini), maxi)))
+        # La barre n'apparaît qu'une fois la hauteur maximale atteinte.
+        self.setVerticalScrollBarPolicy(
+            Qt.ScrollBarAsNeeded if contenu > maxi else Qt.ScrollBarAlwaysOff
+        )
+
+    def resizeEvent(self, event):
+        # Élargir ou rétrécir la fenêtre change le repliement des lignes, donc
+        # la hauteur nécessaire.
+        super().resizeEvent(event)
+        self._ajuster_hauteur()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            modificateurs = event.modifiers()
+            if modificateurs & Qt.ShiftModifier:
+                super().keyPressEvent(event)   # retour à la ligne explicite
+                return
+            self.soumis.emit()
+            return
+        super().keyPressEvent(event)
+
+
 class PromptBarWidget(QWidget):
     """Barre de saisie fixe en bas — champ + bouton Envoyer."""
 
@@ -166,18 +249,8 @@ class PromptBarWidget(QWidget):
         p_lay.setContentsMargins(18, 6, 6, 6)
         p_lay.setSpacing(10)
 
-        self.input_field = QLineEdit()
-        self.input_field.setPlaceholderText("Envoyer un message...")
-        self.input_field.setStyleSheet(
-            f"QLineEdit {{"
-            f"  background: transparent;"
-            f"  border: none;"
-            f"  font-size: 15px;"
-            f"  color: #1a1a1a;"
-            f"  font-family: '{font_family}';"
-            f"}}"
-        )
-        self.input_field.returnPressed.connect(self._submit)
+        self.input_field = ChampSaisieWidget(font_family)
+        self.input_field.soumis.connect(self._submit)
         p_lay.addWidget(self.input_field, 1)
 
         btn = QPushButton("Envoyer")
@@ -204,12 +277,14 @@ class PromptBarWidget(QWidget):
             f"}}"
         )
         btn.clicked.connect(self._submit)
-        p_lay.addWidget(btn)
+        # Le champ grandit avec le contenu : le bouton reste calé en bas de la
+        # pilule plutôt que de flotter au milieu d'un message de plusieurs lignes.
+        p_lay.addWidget(btn, 0, Qt.AlignBottom)
 
         outer.addWidget(pill)
 
     def _submit(self):
-        t = self.input_field.text().strip()
+        t = self.input_field.toPlainText().strip()
         if t:
             self.submitted.emit(t)
             self.input_field.clear()
@@ -291,13 +366,15 @@ class MainWindow(QMainWindow):
         s.addSpacing(6)
 
         self.radio_user = QRadioButton("Utilisateur (API Mistral)")
+        self.radio_outils = QRadioButton("Génération + Outils UI (nouveau)")
         self.radio_selection = QRadioButton("Texte brut (Sélection + Rendu)")
         self.radio_agent = QRadioButton("Agent (Rendu Direct)")
         self.radio_user.setChecked(True)
-        for r in (self.radio_user, self.radio_selection, self.radio_agent):
+        for r in (self.radio_user, self.radio_outils, self.radio_selection, self.radio_agent):
             r.setStyleSheet(f"background: transparent; color: #44403C; font-size: 13px; font-family: '{ff}'; spacing: 8px;")
             r.toggled.connect(self._on_mode)
         s.addWidget(self.radio_user)
+        s.addWidget(self.radio_outils)
         s.addWidget(self.radio_selection)
         s.addWidget(self.radio_agent)
         s.addSpacing(8)
@@ -424,6 +501,15 @@ class MainWindow(QMainWindow):
             response = call_mistral_api(prompt, self.api_key)
             html = genererAffichage(response, fichiers, api_key=self.api_key).html
             QApplication.restoreOverrideCursor()
+        elif self.mode == "GenerationOutils":
+            # NOUVELLE architecture : un seul appel Mistral répond ET appelle
+            # lui-même les outils d'affichage. Ne passe jamais par selection/.
+            # Ce que l'on tape est la question de l'utilisateur, comme en mode
+            # "Utilisateur" — c'est ce qui permet de comparer les deux flux sur
+            # exactement la même requête.
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            html = genererAffichageAvecOutils(prompt, fichiers, api_key=self.api_key).html
+            QApplication.restoreOverrideCursor()
         elif self.mode == "SelectionRendu":
             # Ce que l'on tape EST le texte brut, comme si c'était déjà la
             # sortie de Mistral : on se branche directement à l'entrée de la
@@ -515,6 +601,8 @@ class MainWindow(QMainWindow):
     def _on_mode(self):
         if self.radio_user.isChecked():
             self.mode = "Utilisateur"
+        elif self.radio_outils.isChecked():
+            self.mode = "GenerationOutils"
         elif self.radio_selection.isChecked():
             self.mode = "SelectionRendu"
         else:

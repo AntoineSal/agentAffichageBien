@@ -53,24 +53,35 @@ CATALOGUE = [
         cle="table",
         objectif="Afficher des données tabulaires sous forme de tableau interactif amélioré (tri, filtre, recherche, pagination, colonnes fixes).",
         utiliser_quand=(
-            "Un tableau volumineux, avec beaucoup de lignes/colonnes, des valeurs numériques, "
-            "ou des données que l'utilisateur voudrait raisonnablement trier/filtrer/rechercher."
+            "Plusieurs entités (au moins 4) sont comparées sur plusieurs critères (au moins 3), "
+            "ou les données comportent des valeurs numériques que l'utilisateur voudrait "
+            "raisonnablement trier, filtrer ou rechercher. Exemple typique qui justifie ce "
+            "widget : comparer 5 langages de programmation selon leur typage, leur vitesse, "
+            "leur courbe d'apprentissage et leur usage — 5 lignes x 4 colonnes se lisent "
+            "nettement mieux dans un tableau triable que dans de la prose."
         ),
         ne_pas_utiliser_quand=(
-            "Un petit tableau Markdown (ex: 3 lignes, 2 colonnes) est déjà clair tel quel — "
-            "la présence d'un tableau Markdown ne déclenche PAS automatiquement ce widget. "
-            "Demande-toi : le tableau interactif offre-t-il un avantage significatif sur le "
-            "tableau Markdown existant ? Si non, n'affiche rien."
+            "Le jeu de données est petit (moins de 4 lignes OU moins de 3 colonnes) : "
+            'ex. "les deux plus grands océans et leur superficie" se dit très bien en une '
+            "phrase ou un mini-tableau Markdown. La présence d'un tableau Markdown ne "
+            "déclenche PAS automatiquement ce widget."
         ),
         schema=DonneesTable,
     ),
     DescripteurWidget(
         cle="code",
         objectif="Afficher du code source dans une visionneuse améliorée (coloration syntaxique, langage, numéros de ligne).",
-        utiliser_quand="Le texte contient un vrai bloc de code source, substantiel.",
+        utiliser_quand=(
+            "Le texte contient un bloc de code source d'au moins 2 lignes formant un ensemble "
+            "autonome : une fonction, une classe, un script, une requête SQL, un fichier de "
+            "configuration. C'est le cas dès qu'on demande d'écrire, de montrer ou de donner "
+            'un exemple de code (ex: "écris une fonction Python qui calcule Fibonacci", '
+            '"donne un exemple de requête SQL") — ce sont des cas typiques, pas des cas limites.'
+        ),
         ne_pas_utiliser_quand=(
-            "Un court fragment de code en ligne (inline) — le widget doit rester proportionnel "
-            "à la quantité et à l'importance du code."
+            "Un court fragment de code en ligne (inline), cité au fil d'une explication et tenant "
+            'sur une ligne (ex: "la fonction len() renvoie la longueur, comme dans len(ma_liste)"). '
+            "Le widget doit rester proportionnel à la quantité et à l'importance du code."
         ),
         schema=DonneesCode,
     ),
@@ -97,8 +108,11 @@ CATALOGUE = [
         ),
         ne_pas_utiliser_quand=(
             'Une phrase triviale ne contenant qu\'une seule information (ex: "Paris est la '
-            'capitale de la France." ne justifie pas une card). N\'invente jamais un attribut '
-            "manquant — n'affiche que ce que le texte soutient."
+            'capitale de la France." ne justifie pas une card). Surtout : PLUSIEURS entités '
+            "comparées entre elles sur les mêmes critères — une card décrit UNE seule entité. "
+            'Comparer la démographie de la France, l\'Allemagne et l\'Italie n\'est PAS une card : '
+            "c'est un tableau (ou un graphique si les valeurs évoluent dans le temps). "
+            "N'invente jamais un attribut manquant — n'affiche que ce que le texte soutient."
         ),
         schema=DonneesCard,
     ),

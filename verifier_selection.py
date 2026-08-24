@@ -45,11 +45,13 @@ def main() -> int:
     for texte in EXEMPLES:
         print(f"\n--- Texte : {texte!r}")
         try:
-            resultat = selectionner_widget(texte)
+            appel = selectionner_widget(texte)
         except Exception as exc:
             print(f"Échec : {exc}")
             continue
-        print(resultat.model_dump_json(indent=2))
+        m = appel.metriques
+        print(f"[{m.temps_appel_ms:.0f} ms · {m.tokens_total or '?'} tokens]")
+        print(appel.resultat.model_dump_json(indent=2))
     return 0
 
 

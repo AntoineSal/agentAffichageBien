@@ -1,0 +1,52 @@
+IMAGE
+
+Pour ce test, présente le logo de Wikipédia et inclus son image en Markdown avec exactement cette URL : https://upload.wikimedia.org/wikipedia/commons/6/63/Wikipedia-logo.png → attendu : widget image
+As-tu une photo de la tour Eiffel à me montrer ? → attendu : aucun widget (pas de vraie URL disponible)
+
+FILE
+3. Pour ce test, indique où télécharger un rapport avec exactement ce lien Markdown : [Rapport annuel](https://exemple.com/rapport-2025.pdf) → attendu : widget file
+4. Peux-tu me donner le lien vers le dernier rapport financier d'Apple ? → attendu : aucun widget
+
+CODE
+5. Écris-moi une fonction Python qui calcule la suite de Fibonacci de manière récursive. → attendu : widget code
+6. Comment utilise-t-on la fonction len() en Python ? → attendu : aucun widget (fragment trivial)
+
+TABLE
+7. Compare 5 langages de programmation (Python, Java, C++, JavaScript, Rust) selon leur typage, leur vitesse, leur courbe d'apprentissage et leur usage principal. → attendu : widget table
+8. Quels sont les deux plus grands océans du monde et leur superficie ? → attendu : aucun widget (2 lignes)
+
+CARD
+9. Présente-moi Marie Curie : naissance, découvertes, prix reçus. → attendu : widget card
+10. Qui a peint la Joconde ? → attendu : aucun widget (une seule info)
+
+CHART
+11. Comment le prix du Bitcoin a-t-il évolué approximativement entre 2015 et 2023, année par année ? → attendu : widget chart
+12. Le Bitcoin vaut environ combien aujourd'hui ? → attendu : aucun widget (valeur isolée)
+
+STATS
+13. Donne les statistiques clés de la Terre : diamètre, masse, distance au Soleil, durée de rotation. → attendu : widget stats
+14. Quelle est la masse de la Terre ? → attendu : aucun widget
+
+TIMELINE
+15. Retrace les grandes étapes de la conquête spatiale, de Spoutnik à aujourd'hui. → attendu : widget timeline
+16. En quelle année Neil Armstrong a-t-il marché sur la Lune ? → attendu : aucun widget (une seule date)
+
+Comparaisons plus riches / multi-widgets possibles
+17. Compare l'évolution démographique de la France, l'Allemagne et l'Italie entre 1950 et 2020. → attendu : chart
+18. Présente SpaceX : fondation, siège, PDG, et les grandes étapes de son histoire. → attendu : peut-être card ET timeline ensemble
+19. Classe les 10 pays les plus peuplés du monde avec leur population. → attendu : table ou chart, à observer
+20. Résume ces indicateurs d'une entreprise fictive : CA 50M€, croissance 8%, marge 15%, effectifs 300. → attendu : stats
+
+Contrôles négatifs / conversationnels
+21. Bonjour, comment vas-tu ? → attendu : aucun widget
+22. Explique la différence entre le machine learning et le deep learning. → attendu : aucun widget
+23. Raconte-moi une blague. → attendu : aucun widget
+24. Quelle est la capitale de l'Italie ? → attendu : aucun widget
+25. Donne trois conseils pour bien dormir. → attendu : aucun widget (liste simple)
+
+Cas limites, pour voir où le modèle place le curseur
+26. Donne la météo à Paris pour les 5 prochains jours. → attendu : aucun widget (pas de tool météo dans le catalogue ; teste aussi que Mistral n'invente pas de données)
+27. Quels sont les 3 meilleurs restaurants de Lyon ? → incertain — bon test du garde-fou anti-invention sur le contenu lui-même
+28. Compare en tableau les caractéristiques techniques de l'iPhone 15 et du Samsung Galaxy S24. → attendu : table
+29. Quels sont les symptômes classiques d'un rhume ? → attendu : aucun widget (liste simple)
+30. Donne un exemple de code SQL pour sélectionner les utilisateurs de plus de 18 ans dans une table users. → attendu : widget code

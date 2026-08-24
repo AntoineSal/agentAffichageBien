@@ -335,15 +335,28 @@ def graphique(data: Dict) -> str:
     config = {
         "type": type_js,
         "data": {"labels": data.get("categories") or [], "datasets": datasets},
-        "options": {"responsive": True, "plugins": {"legend": {"display": afficher_legende}}},
+        "options": {
+            "responsive": True,
+            # Le conteneur ci-dessous impose la hauteur : sans cette option,
+            # Chart.js garde son ratio par défaut et ignore cette hauteur.
+            "maintainAspectRatio": False,
+            "plugins": {"legend": {"display": afficher_legende}},
+        },
     }
     id_graph = f"chart-{uuid.uuid4().hex[:8]}"
     titre_graph = data.get("titre")
+    # Le canvas est seul dans un conteneur positionné et de hauteur fixe. C'est
+    # une exigence documentée de Chart.js en mode responsive : il calcule la
+    # taille du canvas depuis son parent, et ce parent doit lui être dédié.
+    # Quand le titre partageait ce conteneur, le canvas s'écrasait à ~190x95 px
+    # au lieu de la pleine largeur (constaté au rendu le 20/08/2026).
     return f'''
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <div style="margin:12px 0;padding:16px;border:1px solid {pal.BORDURE};border-radius:14px;background:{pal.SURFACE};">
       {f'<div style="font-size:13px;font-weight:600;color:{pal.VERT_FONCE};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">{html.escape(titre_graph)}</div>' if titre_graph else ''}
-      <canvas id="{id_graph}" style="max-height:280px;"></canvas>
+      <div style="position:relative;height:280px;width:100%;">
+        <canvas id="{id_graph}"></canvas>
+      </div>
     </div>
     <script>
       (function() {{
