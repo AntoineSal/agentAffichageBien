@@ -24,6 +24,7 @@ from .generation.schemas import PorteurWidget, ResultatGeneration
 from .metriques import Metriques
 from .rendu import palette as pal
 from .rendu.afficheur import afficherJoliment
+from .selection.catalogue import DEBUT, FIN, POSITION_PAR_CLE
 from .selection.confiance import SEUIL_AFFICHAGE, widgets_retenus
 from .selection.schemas import ResultatSelection, WidgetCandidat
 from .selection.selecteur import selectionner_widget
@@ -42,25 +43,97 @@ class ResultatAffichage(NamedTuple):
     resultat_generation: Optional[ResultatGeneration] = None
 
 
-def _retirer_reference_image(texte: str, url: str) -> str:
-    """
-    Exception volontaire, propre au widget image : quand une photo est
-    retenue, sa référence brute (syntaxe Markdown ![alt](url) ou URL nue) est
-    retirée du texte source pour qu'elle n'apparaisse plus qu'une fois, dans
-    le widget. Sans ça, la photo s'affichait deux fois — une fois en brut
-    (coins droits, rendu Markdown natif) et une fois dans le widget (coins
-    arrondis) — et le lien restait visible en texte à côté.
+# ─── Découpage du Markdown, pour savoir où un bloc widget peut être posé ─────
 
-    Seuls `image` et `code` bénéficient de ce traitement (voir aussi
-    `_retirer_bloc_code`) : le texte source doit rester compréhensible seul
-    (voir "Philosophie" du README), et ce n'est que lorsque le widget reprend
-    exactement le même contenu — une image, un bloc de code — que le retrait ne
-    perd aucune information.
+_FENCE_RE = re.compile(r"^[ \t]*```", re.MULTILINE)
+_BLOC_CODE_RE = re.compile(r"```[a-zA-Z0-9_+-]*\n(.*?)\n```", re.DOTALL)
+
+
+def _zones_code(texte: str) -> List[tuple]:
     """
-    motif_markdown = re.compile(r"!\[[^\]]*\]\(\s*" + re.escape(url) + r"\s*\)")
-    texte = motif_markdown.sub("", texte)
-    texte = texte.replace(url, "")
-    return texte
+    Intervalles (début, fin) des blocs de code délimités par ``` ``` ``.
+
+    Nécessaire parce que `rendu/afficheur.py::_WIDGET_BLOCK_RE` n'est PAS
+    conscient des fences (vérifié le 24/08/2026) : un bloc widget qui atterrit
+    au milieu d'un bloc de code utilisateur est quand même extrait et rendu, ce
+    qui casse le bloc de code ET affiche le widget au mauvais endroit. Toute
+    insertion doit donc éviter ces zones.
+    """
+    bornes = [m.start() for m in _FENCE_RE.finditer(texte)]
+    zones = []
+    for i in range(0, len(bornes) - 1, 2):
+        fin_ligne = texte.find("\n", bornes[i + 1])
+        zones.append((bornes[i], len(texte) if fin_ligne == -1 else fin_ligne))
+    return zones
+
+
+def _dans_zone_code(position: int, zones: Sequence[tuple]) -> bool:
+    return any(debut <= position < fin for debut, fin in zones)
+
+
+def _bornes_bloc(texte: str, position: int) -> tuple:
+    """Début et fin du bloc Markdown (paragraphe, séparé par une ligne vide)
+    qui contient `position`."""
+    debut = texte.rfind("\n\n", 0, position)
+    debut = 0 if debut == -1 else debut + 2
+    fin = texte.find("\n\n", position)
+    return debut, len(texte) if fin == -1 else fin
+
+
+def _poser_a_la_place(texte: str, debut: int, fin: int, bloc: str) -> str:
+    """
+    Substitue le bloc widget à `texte[debut:fin]`, sans jamais l'insérer au
+    milieu d'un paragraphe : un bloc widget doit être séparé par des lignes
+    vides, sinon le parser Markdown l'absorbe dans le paragraphe voisin (et
+    l'extension `nl2br`, active, rend le texte sensible aux retours simples).
+
+    Deux cas :
+    - la référence était seule dans son paragraphe (cas courant : une image ou
+      un bloc de code sur sa propre ligne) → le widget prend toute la place ;
+    - la référence était au fil d'une phrase → la phrase est conservée, amputée
+      de la référence, et le widget est posé juste après elle.
+    """
+    bloc_debut, bloc_fin = _bornes_bloc(texte, debut)
+    reste = (texte[bloc_debut:debut] + texte[fin:bloc_fin]).strip()
+    remplacement = f"{reste}\n\n{bloc}" if reste else bloc
+    return texte[:bloc_debut] + remplacement + texte[bloc_fin:]
+
+
+def _remplacer_reference_image(texte: str, url: str, bloc: str) -> tuple:
+    """
+    Le widget image prend la place de la référence que le texte fait déjà à
+    cette image (syntaxe Markdown ![alt](url) ou URL nue).
+
+    Historiquement cette référence était seulement RETIRÉE, et le widget ajouté
+    en fin de réponse : la photo s'affichait sinon deux fois — une fois en brut
+    (coins droits, rendu Markdown natif) et une fois dans le widget. La
+    substitution donne le même résultat sur ce point, mais garde la photo là où
+    la réponse en parle, ce qui est le comportement demandé le 24/08/2026.
+
+    Renvoie (placé, texte). `placé` est faux quand le texte ne référence pas
+    l'image — le modèle a alors appelé l'outil sans que sa réponse mentionne
+    l'URL, et c'est la position par défaut du catalogue qui s'applique.
+    """
+    motifs = [
+        re.compile(r"!\[[^\]]*\]\(\s*" + re.escape(url) + r"\s*\)"),
+        re.compile(re.escape(url)),
+    ]
+    zones = _zones_code(texte)
+
+    for motif in motifs:
+        for occurrence in motif.finditer(texte):
+            if _dans_zone_code(occurrence.start(), zones):
+                continue
+            texte = _poser_a_la_place(texte, occurrence.start(), occurrence.end(), bloc)
+            # Le modèle cite parfois la même URL deux fois (image Markdown puis
+            # lien nu). Les occurrences restantes sont retirées, sans quoi elles
+            # s'afficheraient à côté du widget.
+            avant, apres = texte.split(bloc, 1)
+            for reste in motifs:
+                apres = reste.sub("", apres)
+            return True, avant + bloc + apres
+
+    return False, texte
 
 
 # Un bloc Markdown est considéré comme repris par le widget au-delà de ce taux
@@ -80,90 +153,123 @@ def _normaliser_code(source: str) -> str:
     return "".join(source.split())
 
 
-def _retirer_bloc_code(texte: str, code: str) -> str:
+def _remplacer_bloc_code(texte: str, code: str, bloc: str) -> tuple:
     """
-    Même principe que `_retirer_reference_image`, pour le widget `code` : quand
-    le modèle écrit le code dans sa réponse ET appelle l'outil, le code
+    Même principe que `_remplacer_reference_image`, pour le widget `code` :
+    quand le modèle écrit le code dans sa réponse ET appelle l'outil, le code
     apparaissait deux fois — une fois en bloc Markdown brut, une fois dans le
-    widget (constaté le 20/08/2026 sur une demande de fonction Fibonacci).
+    widget (constaté le 20/08/2026 sur une demande de fonction Fibonacci). Le
+    widget prend maintenant la place du bloc Markdown au lieu d'être relégué en
+    fin de réponse : la phrase qui introduit le code reste juste au-dessus.
 
-    Deux passes, pour ne jamais supprimer un autre extrait de code de la
-    réponse :
+    Deux passes pour identifier le bloc, afin de ne jamais toucher à un autre
+    extrait de code de la réponse :
 
-    1. Tout bloc dont le contenu est identique au widget (espaces ignorés) est
-       retiré — c'est le cas courant.
-    2. Si aucun bloc n'est identique, le bloc le PLUS proche est retiré, et
-       seulement lui, à condition de dépasser `_SEUIL_SIMILARITE_CODE`. Cette
-       seconde passe corrige un cas réel constaté le 21/08/2026 : le modèle
-       reformule légèrement le code entre son texte et son appel d'outil
-       (commentaire ajouté, espaces autour des opérateurs), et la comparaison
-       exacte laissait alors passer le doublon.
+    1. Les blocs identiques au widget (espaces ignorés) — cas courant.
+    2. À défaut, le bloc le PLUS proche, et seulement lui, s'il dépasse
+       `_SEUIL_SIMILARITE_CODE`. Cette seconde passe corrige un cas réel
+       constaté le 21/08/2026 : le modèle reformule légèrement le code entre
+       son texte et son appel d'outil (commentaire ajouté, espaces autour des
+       opérateurs), et la comparaison exacte laissait alors passer le doublon.
+
+    Renvoie (placé, texte), comme `_remplacer_reference_image`.
     """
     cible = _normaliser_code(code)
     if not cible:
-        return texte
+        return False, texte
 
-    blocs = list(re.finditer(r"```[a-zA-Z0-9_+-]*\n(.*?)\n```", texte, flags=re.DOTALL))
+    blocs = list(_BLOC_CODE_RE.finditer(texte))
     if not blocs:
-        return texte
+        return False, texte
 
-    exacts = [b for b in blocs if _normaliser_code(b.group(1)) == cible]
-    if exacts:
-        a_retirer = exacts
-    elif len(cible) < _TAILLE_MINI_CODE_FLOU:
-        return texte
-    else:
+    correspondants = [b for b in blocs if _normaliser_code(b.group(1)) == cible]
+    if not correspondants:
+        if len(cible) < _TAILLE_MINI_CODE_FLOU:
+            return False, texte
         meilleur = max(
             blocs,
             key=lambda b: SequenceMatcher(None, cible, _normaliser_code(b.group(1))).ratio(),
         )
         ratio = SequenceMatcher(None, cible, _normaliser_code(meilleur.group(1))).ratio()
         if ratio < _SEUIL_SIMILARITE_CODE:
-            return texte
-        a_retirer = [meilleur]
+            return False, texte
+        correspondants = [meilleur]
 
-    resultat = texte
-    for bloc in reversed(a_retirer):
-        resultat = resultat[: bloc.start()] + resultat[bloc.end():]
-    return resultat
+    # Le premier bloc cède sa place au widget ; les éventuels doublons exacts
+    # qui suivent sont simplement retirés. On repart de la fin pour que les
+    # positions déjà calculées restent valides.
+    premier, suivants = correspondants[0], correspondants[1:]
+    for autre in reversed(suivants):
+        texte = texte[: autre.start()] + texte[autre.end():]
+    return True, _poser_a_la_place(texte, premier.start(), premier.end(), bloc)
 
 
-def _construire_blocs_widgets(widgets: Sequence[PorteurWidget]) -> List[str]:
-    """Sérialise des widgets vers le contrat déjà consommé par le renderer.
+def _bloc_widget(widget: PorteurWidget) -> str:
+    """Sérialise un widget vers le contrat déjà consommé par le renderer.
     Accepte indifféremment les `WidgetCandidat` de l'ancien flux et les
     `WidgetGenere` du nouveau : les deux exposent `.type` et `.donnees`, et
     c'est tout ce dont cette fonction a besoin (cf. `PorteurWidget`)."""
-    return [
-        f"```widget:{widget.type}\n{widget.donnees.model_dump_json(exclude_none=True)}\n```"
-        for widget in widgets
-    ]
+    return f"```widget:{widget.type}\n{widget.donnees.model_dump_json(exclude_none=True)}\n```"
+
+
+def _construire_blocs_widgets(widgets: Sequence[PorteurWidget]) -> List[str]:
+    return [_bloc_widget(widget) for widget in widgets]
 
 
 def _annoter_texte(texte_brut: str, widgets: Sequence[PorteurWidget]) -> str:
     """
-    Assemble le texte final envoyé au renderer : le texte d'origine, débarrassé
-    des références d'image reprises en widget, suivi des blocs widget.
+    Assemble le texte final envoyé au renderer : le Markdown d'origine, avec les
+    blocs widget posés à leur place.
 
-    Les blocs sont ajoutés à la fin, pas intercalés dans le texte : le renderer
-    place chaque widget là où son bloc apparaît, donc il n'a besoin d'aucune
-    information de position pour fonctionner. Si un placement plus fin devenait
-    souhaitable (texte / graphique / texte), la voie propre serait un champ
-    d'ancrage optionnel — un court extrait verbatim du Markdown après lequel
-    insérer le widget, avec repli en fin de texte si l'extrait est introuvable.
-    Non implémenté volontairement : ce serait un champ que le renderer n'utilise
-    pas, pour un besoin que rien n'a encore démontré.
+    Le renderer place chaque widget là où son bloc apparaît (`_extraire_widgets`
+    le remplace par un marqueur, `_injecter_widgets` réinjecte le HTML au
+    marqueur) — la position est donc entièrement décidée ici, et `rendu/` n'a
+    pas à la connaître.
+
+    Trois cas, dans cet ordre :
+
+    1. **Le texte dit déjà où va le widget** — `image` et `code` sont référencés
+       explicitement dans la réponse. Le widget prend la place de cette
+       référence : la photo reste là où la phrase en parle, le code sous la
+       phrase qui l'introduit. Aucune information n'est demandée au modèle.
+    2. **Sinon, la position par défaut du type** (`selection/catalogue.py`) :
+       un widget qui RÉPOND à la question passe avant le texte (`card`, `stats`,
+       `image` non référencée), un widget qui APPUIE une démonstration déjà
+       écrite passe après (`chart`, `table`, `timeline`, `file`, `code` non
+       référencé).
+    3. À l'intérieur d'un même emplacement, l'ordre d'appel du modèle est
+       conservé — il est déjà déterministe, et rien n'a démontré le besoin d'un
+       classement supplémentaire.
+
+    Un champ de position choisi par le modèle (phase 2) ou un ancrage fin
+    (phase 3) viendraient se greffer entre 1 et 2, sans rien changer d'autre —
+    voir FEUILLE_DE_ROUTE_WIDGETS_INTEGRES.md.
     """
-    texte = texte_brut
-    for widget in widgets:
-        if widget.type == "image":
-            texte = _retirer_reference_image(texte, widget.donnees.url)
-        elif widget.type == "code":
-            texte = _retirer_bloc_code(texte, widget.donnees.code)
-
-    blocs = _construire_blocs_widgets(widgets)
-    if not blocs:
+    if not widgets:
         return texte_brut
-    return texte.strip() + "\n\n" + "\n\n".join(blocs)
+
+    texte = texte_brut
+    en_tete: List[str] = []
+    en_pied: List[str] = []
+
+    for widget in widgets:
+        bloc = _bloc_widget(widget)
+
+        place = False
+        if widget.type == "image":
+            place, texte = _remplacer_reference_image(texte, widget.donnees.url, bloc)
+        elif widget.type == "code":
+            place, texte = _remplacer_bloc_code(texte, widget.donnees.code, bloc)
+        if place:
+            continue
+
+        if POSITION_PAR_CLE.get(widget.type, FIN) == DEBUT:
+            en_tete.append(bloc)
+        else:
+            en_pied.append(bloc)
+
+    morceaux = en_tete + [texte.strip()] + en_pied
+    return "\n\n".join(morceau for morceau in morceaux if morceau)
 
 
 def _ligne_metriques(m: Metriques) -> str:

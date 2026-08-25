@@ -1,7 +1,11 @@
 # Feuille de route — intégrer les widgets dans le corps du message
 
 Étude de faisabilité + plan d'implémentation, rédigée le 24/08/2026.
-**Rien de ce qui suit n'est implémenté** — c'est un document de décision.
+
+> **État au 24/08/2026 — la phase 1 est implémentée et testée** (21 tests dans
+> `tests/test_placement_widgets.py`). Les phases 2 et 3 restent à décider ; elles
+> ne se justifient que si l'usage réel montre que les positions par défaut ne
+> suffisent pas. Voir §4 pour le détail de ce qui a été fait.
 
 Comme pour `HANDOFF.md` : ce qui est marqué « vérifié » a été exécuté, pas
 supposé. Le reste est explicitement présenté comme une hypothèse.
@@ -105,7 +109,7 @@ clair dans la réponse. À ne rouvrir que si A→D échouent tous.
 
 ## 4. Recommandation : trois phases, par ordre de rapport valeur/risque
 
-### Phase 1 — Placement déterministe (aucune intervention du modèle)
+### ✅ Phase 1 — Placement déterministe (aucune intervention du modèle) — **FAITE le 24/08/2026**
 
 **C'est la phase qui répond déjà à toutes les demandes formulées.** Elle ne
 dépend d'aucun comportement du modèle, donc elle ne peut pas régresser.
@@ -144,14 +148,38 @@ Ajouter un champ `position` au `DescripteurWidget` de
 | `code` | en place, sinon **fin** | |
 | `table`, `chart`, `timeline`, `file` | **fin** | appuient une démonstration déjà écrite |
 
-> **Décision qui te revient** : ce tableau est une proposition. `stats` en tête
-> est le point le plus discutable — à trancher avant implémentation.
+> **Tableau appliqué tel quel.** `stats` en tête reste le point le plus
+> discutable : si les indicateurs se lisent mieux après le texte, c'est une
+> ligne à changer dans `selection/catalogue.py` (`position=DEBUT` → défaut).
 
-**Fichiers touchés** : `pipeline.py` (`_annoter_texte`, les deux fonctions de
-substitution), `selection/catalogue.py` (champ additif).
-**Effort** : petit — une fonction réécrite, un champ ajouté, ~8 tests.
+**Ce qui a réellement été écrit** :
+
+- `selection/catalogue.py` — constantes `DEBUT`/`FIN`, champ `position` du
+  `DescripteurWidget` (additif, défaut `FIN`), table `POSITION_PAR_CLE`.
+- `pipeline.py` — `_retirer_reference_image`/`_retirer_bloc_code` deviennent
+  `_remplacer_*` et renvoient `(placé, texte)` ; `_annoter_texte` répartit entre
+  en-tête, corps et pied ; nouveaux utilitaires `_zones_code`, `_bornes_bloc`,
+  `_poser_a_la_place`.
+- `tests/test_placement_widgets.py` — 21 tests.
+
+**Deux points qui se sont révélés à l'écriture**, et qui n'étaient pas dans le
+plan initial :
+
+1. `_remplacer_reference_image` doit retirer les occurrences **restantes** de
+   l'URL après substitution. L'ancienne version faisait `texte.replace(url, "")`,
+   qui les supprimait toutes ; substituer la première sans nettoyer les autres
+   laissait le lien nu affiché à côté du widget.
+2. Une référence citée **au fil d'une phrase** ne peut pas être remplacée sur
+   place sans casser le paragraphe. La phrase est donc conservée, amputée de la
+   référence, et le widget posé juste après elle (`_poser_a_la_place`).
+
+**Écart assumé avec le plan** : aucun entier de tri n'a été ajouté au catalogue.
+L'ordre d'appel du modèle est déjà déterministe et suffit à départager deux
+widgets d'un même emplacement — un classement supplémentaire aurait été un
+réglage que rien ne demande.
+
 **Bénéficie aux deux flux** : `_annoter_texte()` est partagée, l'ancien pipeline
-gagne le même comportement sans être modifié.
+gagne le même comportement sans que `selection/` soit modifié (vérifié par test).
 
 ### Phase 2 — Le modèle peut surcharger la position (stratégie C)
 
@@ -221,9 +249,19 @@ ancien/nouveau flux reste valable, ce qui est le but du dispositif actuel.
 
 ---
 
-## 7. Prochaine action proposée
+## 7. Prochaine action
 
-Valider le tableau des positions par défaut (§4, Phase 1b), puis implémenter la
-**Phase 1 seule** et la juger en test manuel sur les questions de
-`bugs_new_architecture.txt`. Les Phases 2 et 3 ne se décident qu'au vu de ce
-résultat.
+La phase 1 étant livrée, la suite est un **test manuel** dans le sandbox sur les
+questions de `bugs_new_architecture.txt`, en observant spécifiquement :
+
+- la `card` en tête se lit-elle bien comme un résumé, ou coupe-t-elle la
+  réponse ? (question 9, Marie Curie)
+- `stats` en tête est-il le bon choix ? (question 13, la Terre)
+- l'image tombe-t-elle au bon endroit quand le texte la référence ?
+  (question 1, logo Wikipédia)
+- le code sous sa phrase d'introduction est-il plus lisible qu'en fin de
+  réponse ? (questions 5 et 30)
+
+Les phases 2 et 3 ne se décident qu'au vu de ce résultat. Rien ne justifie de
+les ouvrir tant que les positions par défaut n'ont pas été jugées insuffisantes
+sur des cas réels.

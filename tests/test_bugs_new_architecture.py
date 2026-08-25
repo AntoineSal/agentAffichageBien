@@ -259,7 +259,7 @@ def test_deux_outils_differents_restent_autorises():
 
 
 # ─── Bug F (21/08) : code dupliqué quand le modèle reformule ────────────────
-# `_retirer_bloc_code` ne comparait qu'à l'identique (espaces ignorés) : un
+# `_remplacer_bloc_code` (alors `_retirer_bloc_code`) ne comparait qu'à l'identique (espaces ignorés) : un
 # commentaire ajouté ou des espaces autour des opérateurs suffisaient à laisser
 # passer le doublon.
 

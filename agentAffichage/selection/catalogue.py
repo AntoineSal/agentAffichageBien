@@ -26,6 +26,13 @@ from .schemas import (
 )
 
 
+# Emplacements possibles d'un widget dans la réponse. Volontairement grossiers :
+# "début" et "fin" suffisent à tout ce qui a été demandé, et se décident sans
+# rien demander au modèle (voir FEUILLE_DE_ROUTE_WIDGETS_INTEGRES.md, phase 1).
+DEBUT = "debut"
+FIN = "fin"
+
+
 @dataclass(frozen=True)
 class DescripteurWidget:
     cle: str
@@ -33,6 +40,13 @@ class DescripteurWidget:
     utiliser_quand: str
     ne_pas_utiliser_quand: str
     schema: Type[BaseModel]
+    # Où poser le widget quand le texte ne dit pas lui-même où il va. Un widget
+    # qui RÉPOND à la question se place avant le texte qui la développe ; un
+    # widget qui APPUIE une démonstration déjà écrite se place après elle.
+    # `image` et `code` sont des cas à part : quand le texte les référence
+    # explicitement, ils prennent la place de cette référence et cette valeur
+    # n'est utilisée qu'en repli (voir pipeline._annoter_texte).
+    position: str = FIN
 
 
 CATALOGUE = [
@@ -48,6 +62,9 @@ CATALOGUE = [
             'photo de Paris." sans lien). N\'invente jamais d\'URL.'
         ),
         schema=DonneesImage,
+        # Repli seulement : normalement l'image prend la place de la référence
+        # présente dans le texte.
+        position=DEBUT,
     ),
     DescripteurWidget(
         cle="table",
@@ -115,6 +132,9 @@ CATALOGUE = [
             "N'invente jamais un attribut manquant — n'affiche que ce que le texte soutient."
         ),
         schema=DonneesCard,
+        # Une card résume l'entité dont parle la réponse : elle se lit avant le
+        # texte qui la détaille, pas après.
+        position=DEBUT,
     ),
     DescripteurWidget(
         cle="chart",
@@ -147,6 +167,9 @@ CATALOGUE = [
             "d'unité, de comparaison ou de tendance."
         ),
         schema=DonneesStats,
+        # Même rôle que la card : quand on demande "les chiffres clés de X", les
+        # indicateurs SONT la réponse — le texte les commente ensuite.
+        position=DEBUT,
     ),
     DescripteurWidget(
         cle="timeline",
@@ -163,3 +186,9 @@ CATALOGUE = [
         schema=DonneesTimeline,
     ),
 ]
+
+
+# Clé de widget -> position par défaut. Un type absent de cette table (widgets
+# de rendu non proposés par la sélection : "weather", "titre", "paragraphe",
+# "liste") retombe sur FIN.
+POSITION_PAR_CLE = {w.cle: w.position for w in CATALOGUE}

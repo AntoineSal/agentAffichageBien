@@ -109,20 +109,45 @@ widgets.
 
 ### Placement des widgets dans la réponse
 
-Les blocs sont ajoutés **à la fin** du texte, comme dans l'ancien flux. Le
-renderer place chaque widget là où son bloc apparaît : il n'a besoin d'aucune
-information de position pour fonctionner, donc l'architecture la plus simple
-suffit.
+Les widgets font **partie du message**, ils ne sont plus concaténés en fin de
+réponse (changement du 24/08/2026 — phase 1 de
+`FEUILLE_DE_ROUTE_WIDGETS_INTEGRES.md`).
 
-Un placement intégré au corps du message (card en tête, image là où le texte en
-parle) **est demandé** depuis le 24/08/2026. Étude de faisabilité et plan
-d'implémentation : `FEUILLE_DE_ROUTE_WIDGETS_INTEGRES.md` à la racine du dépôt.
+Tout se décide dans `pipeline.py::_annoter_texte()`. **`rendu/` n'a pas
+bougé** : le renderer place chaque widget là où son bloc apparaît
+(`_extraire_widgets()` le remplace par un marqueur, `_injecter_widgets()`
+réinjecte le HTML au marqueur), donc la position est portée par le texte et le
+renderer n'a rien à en savoir.
 
-Point vérifié le 24/08/2026, utile à connaître avant d'y toucher : le renderer
-place déjà correctement un widget en tête ou intercalé entre deux paragraphes —
-c'est une conséquence directe du système de marqueurs de `_extraire_widgets()`
-/ `_injecter_widgets()`. **`rendu/` n'a donc pas à bouger** ; tout le sujet tient
-dans `pipeline.py::_annoter_texte()`, qui décide où poser les blocs.
+Trois règles, dans cet ordre :
+
+1. **Le texte dit déjà où va le widget.** `image` et `code` sont référencés
+   explicitement dans la réponse : le widget prend la place de cette référence.
+   La photo reste là où la phrase en parle, le code sous la phrase qui
+   l'introduit. Rien n'est demandé au modèle.
+2. **Sinon, la position par défaut du type**, déclarée par le champ `position`
+   du `DescripteurWidget` (`selection/catalogue.py`) : un widget qui **répond**
+   à la question passe avant le texte (`card`, `stats`, et `image` non
+   référencée), un widget qui **appuie** une démonstration déjà écrite passe
+   après (`chart`, `table`, `timeline`, `file`, et `code` non référencé). Un
+   type absent du catalogue (`weather`, `titre`...) retombe sur la fin.
+3. À l'intérieur d'un même emplacement, l'ordre d'appel du modèle est conservé
+   — il est déjà déterministe, aucun classement supplémentaire n'a été ajouté.
+
+Deux contraintes que le placement respecte, l'une et l'autre vérifiées :
+
+- **Jamais d'insertion dans un bloc de code.** `rendu/afficheur.py::_WIDGET_BLOCK_RE`
+  n'est pas conscient des fences Markdown : un bloc widget qui atterrit au
+  milieu d'un ` ```yaml ` serait quand même extrait et rendu, cassant le bloc de
+  l'utilisateur. `_zones_code()` calcule les intervalles à éviter.
+- **Jamais d'insertion en plein paragraphe.** Un bloc widget doit être entouré
+  de lignes vides, sinon le parser l'absorbe dans le paragraphe voisin
+  (l'extension `nl2br` est active). Quand la référence était au fil d'une
+  phrase, la phrase est conservée et le widget posé juste après elle.
+
+Les phases 2 (position choisie par le modèle) et 3 (ancrage fin) de la feuille
+de route ne sont **pas** implémentées : elles se grefferaient entre les règles 1
+et 2 sans rien changer d'autre.
 
 ### Streaming — état vérifié
 
@@ -409,7 +434,7 @@ via `pipeline.py`, exactement comme `selectionner_widget()` seul).
 - [x] **Palette + corrections visuelles (18/08/2026)** — `rendu/palette.py` (vert de marque EchoSocial + complémentaires), appliquée aux 8 widgets, à la CSS de page et à l'UI du sandbox. Bug des camemberts monochromes corrigé. Widget `image` : repli visible si l'URL est cassée.
 - [x] **Console de sélection + correctif photo (18/08/2026)** — `genererAffichage()` renvoie maintenant `ResultatAffichage` (`html`, `resultat_selection`, `erreur`) ; panneau "Console de sélection" injecté dans chaque message (modes Utilisateur / Texte brut), listant tous les candidats avec confidence, statut et raison. Widget `image` : la référence brute (Markdown ou URL nue) est retirée du texte source quand le widget est retenu, exception isolée à ce seul widget — corrige l'affichage en double de la photo.
 - [x] **Nouvelle architecture (20/08/2026, branche `new_architecture`)** — widgets décidés à la génération via le tool calling de Mistral (`generation/`), en parallèle de l'ancien flux conservé intact. 4ᵉ mode dans le sandbox pour comparer les deux sur la même question. Voir "Nouvelle architecture" en haut de ce document.
-- [x] **124/124 tests passent** (63 existants + 29 sur la nouvelle architecture + 11 de non-régression sur les bugs du 20/08 + 5 sur les métriques + 16 sur les bugs du 21/08).
+- [x] **145/145 tests passent** (63 existants + 29 sur la nouvelle architecture + 11 de non-régression sur les bugs du 20/08 + 5 sur les métriques + 16 sur les bugs du 21/08 + 21 sur le placement des widgets).
 - [x] **Métriques temps + tokens (21/08/2026)** — nouveau `metriques.py` (`Metriques`, partagé) : temps d'appel Mistral, temps de traitement local, tokens (prompt/completion/total) quand l'API les fournit — vérifié dans le SDK, préservé aussi bien par `client.chat.parse()` que `client.chat.complete()`. Affiché en tête de chaque console ("⏱ ... ms · 🔤 ... tokens"). `selectionner_widget()` renvoie maintenant `AppelSelection(resultat, metriques)` — `ResultatSelection` lui-même n'a pas bougé, c'est le schéma envoyé à Mistral, lui ajouter des champs annexes changerait ce qu'on lui demande de produire.
 - [x] **Bugs corrigés le 20/08/2026** (voir `bugs_new_architecture.txt` et `tests/test_bugs_new_architecture.py`) :
   - **Nombres refusés** — Pydantic v2 convertit `"430"` en float mais refuse `1957` en `str`. Un modèle qui remplit un widget envoie pourtant naturellement des nombres (`{"date": 1957}`, une population à `1425000000`) : quatre widgets sur huit rejetaient donc des appels parfaitement légitimes. Corrigé par `TexteSouple` dans `selection/schemas.py`, qui convertit les nombres en texte à la validation.
@@ -427,6 +452,7 @@ via `pipeline.py`, exactement comme `selectionner_widget()` seul).
   - **Code encore dupliqué malgré le correctif du 20/08** — `_retirer_bloc_code()` ne comparait qu'à l'identique (espaces ignorés) : un commentaire ajouté ou des espaces autour des opérateurs suffisaient à laisser passer le doublon. Seconde passe ajoutée par similarité (`SequenceMatcher`, seuil 0.85, seulement sur le bloc le plus proche). Seuil choisi sur mesure réelle : une reformulation légère du même code donne ~0.93, deux fonctions différentes de forme voisine plafonnent vers 0.65-0.69.
   - **Photo inventée** — non corrigé, volontairement : décidé le 24/08/2026 qu'un vrai tool de recherche d'image sera ajouté dans l'architecture réelle. Mistral n'a aucune capacité de recherche d'image, aucun correctif de prompt ne peut y suppléer.
 - [x] **Saisie multi-ligne dans le sandbox (24/08/2026)** — `sandbox/app.py` : le `QLineEdit` de la barre de prompt devient `ChampSaisieWidget` (QTextEdit). Entrée envoie, **Maj+Entrée** passe à la ligne, le collage multi-ligne conserve ses retours. La hauteur suit le contenu jusqu'à 8 lignes puis le champ défile. Coller depuis une page web n'amène pas sa mise en forme (`setAcceptRichText(False)`).
+- [x] **Widgets intégrés au corps du message (24/08/2026)** — phase 1 de `FEUILLE_DE_ROUTE_WIDGETS_INTEGRES.md`. Les blocs ne sont plus concaténés en fin de réponse : `image` et `code` prennent la place de la référence que le texte fait déjà à leur contenu, et les autres suivent la position par défaut de leur type (nouveau champ `position` du `DescripteurWidget`). Une `card` ouvre donc le message qu'elle résume, un `chart` le referme. `rendu/` n'a pas été modifié — le renderer plaçait déjà correctement un widget en tête ou intercalé, c'est `_annoter_texte()` qui ne lui en donnait jamais l'occasion. Deux garde-fous vérifiés : aucune insertion dans un bloc de code (`_WIDGET_BLOCK_RE` n'est pas conscient des fences), aucune insertion en plein paragraphe. Le placement est partagé par les deux flux.
 - [ ] **À vérifier avec un vrai appel Mistral** — le nouveau flux n'a été testé qu'avec un client simulé. Deux points spécifiquement à observer : le palier de modèle nécessaire pour un tool calling fiable, et le comportement de `strict: true` sur les schémas de fonction (constante `SCHEMA_STRICT` dans `generation/outils.py`, facile à désactiver si l'API la refuse — notre validation Pydantic reste la vraie garantie). Lancer `verifier_generation.py`.
 - [ ] **Décision à prendre avec Antoine** — la séparation "l'agent conversationnel ignore les widgets" était sa consigne initiale ; le nouveau flux s'en écarte délibérément. À valider avant de retirer `selection/`.
 - [ ] **Phase 5** — robustesse (grille de test manuelle) sur le nouveau catalogue
